@@ -18,3 +18,8 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorResponse{Error: msg})
 }
+
+func GetUserID(r *http.Request) (string, bool) {
+	userID, ok := r.Context().Value(ContextUserID).(string)
+	return userID, ok
+}

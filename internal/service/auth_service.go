@@ -78,7 +78,6 @@ func (s *AuthService) issueTokens(user domain.User) (domain.AuthResponse, string
 	if err != nil {
 		return domain.AuthResponse{}, "", fmt.Errorf("generate refresh token: %w", err)
 	}
-	user.Password = ""
 	return domain.AuthResponse{
 		User:        user,
 		AccessToken: accessToken,

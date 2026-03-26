@@ -24,16 +24,22 @@ func main() {
 	userRepo := repository.NewUserRepository(database)
 	tokenService := service.NewTokenService(cfg.JWT)
 	authService := service.NewAuthService(userRepo, tokenService)
+
 	authHandler := handler.NewAuthHandler(authService)
+	userHandler := handler.NewUserHandler()
+
+	authMiddleware := handler.AuthMiddleware(tokenService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 
+	mux.Handle("GET /api/users/me", authMiddleware(http.HandlerFunc(userHandler.Me)))
+
 	addr := fmt.Sprintf(":%s", cfg.App.Port)
 	log.Printf("starting server on %s (env: %s)", addr, cfg.App.Env)
 
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %s", err)
 	}
 }
