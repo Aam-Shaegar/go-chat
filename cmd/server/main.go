@@ -35,7 +35,7 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler()
-	roomHandler := handler.NewRoomHandler(roomService)
+	roomHandler := handler.NewRoomHandler(roomService, messageRepo)
 	wsHandler := handler.NewWSHandler(handler.WSHandlerDeps{
 		Hub:         hub,
 		RoomService: roomService,
@@ -55,6 +55,7 @@ func main() {
 	mux.Handle("GET /api/rooms/my", authMiddleware(http.HandlerFunc(roomHandler.ListMy)))
 	mux.Handle("GET /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.GetRoomByID)))
 	mux.Handle("POST /api/rooms/{id}/join", authMiddleware(http.HandlerFunc(roomHandler.Join)))
+	mux.Handle("GET /api/rooms/{id}/messages", authMiddleware(http.HandlerFunc(roomHandler.GetMessages)))
 
 	mux.Handle("/ws/rooms/{id}", authMiddleware(http.HandlerFunc(wsHandler.ServeWS)))
 

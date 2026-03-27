@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"go-chat/internal/repository"
 	"go-chat/internal/service"
 	"log"
 	"net/http"
@@ -10,10 +11,11 @@ import (
 
 type RoomHandler struct {
 	roomService *service.RoomService
+	messageRepo *repository.MessageRepository
 }
 
-func NewRoomHandler(roomService *service.RoomService) *RoomHandler {
-	return &RoomHandler{roomService: roomService}
+func NewRoomHandler(roomService *service.RoomService, messageRepo *repository.MessageRepository) *RoomHandler {
+	return &RoomHandler{roomService: roomService, messageRepo: messageRepo}
 }
 
 func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -100,4 +102,28 @@ func (h *RoomHandler) GetRoomByID(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, room)
 
+}
+
+func (h *RoomHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	roomID := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
+	roomID = strings.TrimSuffix(roomID, "/messages")
+
+	isMember, err := h.roomService.IsMember(r.Context(), roomID, userID)
+	if err != nil || !isMember {
+		writeError(w, http.StatusForbidden, "you are not a member of this room")
+		return
+	}
+
+	messages, err := h.messageRepo.ListByRoomID(r.Context(), roomID, 50)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get messages")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messages)
 }
