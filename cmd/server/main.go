@@ -7,6 +7,7 @@ import (
 	"go-chat/internal/handler"
 	"go-chat/internal/repository"
 	"go-chat/internal/service"
+	"go-chat/internal/ws"
 	"log"
 	"net/http"
 )
@@ -23,14 +24,22 @@ func main() {
 
 	userRepo := repository.NewUserRepository(database)
 	roomRepo := repository.NewRoomRepository(database)
+	messageRepo := repository.NewMessageRepository(database)
 
 	tokenService := service.NewTokenService(cfg.JWT)
 	authService := service.NewAuthService(userRepo, tokenService)
 	roomService := service.NewRoomService(roomRepo)
 
+	hub := ws.NewHub(messageRepo, userRepo, roomService)
+	go hub.Run()
+
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler()
 	roomHandler := handler.NewRoomHandler(roomService)
+	wsHandler := handler.NewWSHandler(handler.WSHandlerDeps{
+		Hub:         hub,
+		RoomService: roomService,
+	})
 
 	authMiddleware := handler.AuthMiddleware(tokenService)
 
@@ -46,6 +55,8 @@ func main() {
 	mux.Handle("GET /api/rooms/my", authMiddleware(http.HandlerFunc(roomHandler.ListMy)))
 	mux.Handle("GET /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.GetRoomByID)))
 	mux.Handle("POST /api/rooms/{id}/join", authMiddleware(http.HandlerFunc(roomHandler.Join)))
+
+	mux.Handle("/ws/rooms/{id}", authMiddleware(http.HandlerFunc(wsHandler.ServeWS)))
 
 	addr := fmt.Sprintf(":%s", cfg.App.Port)
 	log.Printf("starting server on %s (env: %s)", addr, cfg.App.Env)
