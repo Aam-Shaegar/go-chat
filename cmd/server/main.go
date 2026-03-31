@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+
 	"go-chat/internal/config"
 	"go-chat/internal/db"
 	"go-chat/internal/handler"
 	"go-chat/internal/repository"
 	"go-chat/internal/service"
 	"go-chat/internal/ws"
-	"log"
-	"net/http"
 )
 
 func main() {
@@ -37,8 +38,9 @@ func main() {
 	userHandler := handler.NewUserHandler()
 	roomHandler := handler.NewRoomHandler(roomService, messageRepo)
 	wsHandler := handler.NewWSHandler(handler.WSHandlerDeps{
-		Hub:         hub,
-		RoomService: roomService,
+		Hub:          hub,
+		RoomService:  roomService,
+		TokenService: tokenService,
 	})
 
 	authMiddleware := handler.AuthMiddleware(tokenService)
@@ -57,7 +59,9 @@ func main() {
 	mux.Handle("POST /api/rooms/{id}/join", authMiddleware(http.HandlerFunc(roomHandler.Join)))
 	mux.Handle("GET /api/rooms/{id}/messages", authMiddleware(http.HandlerFunc(roomHandler.GetMessages)))
 
-	mux.Handle("/ws/rooms/{id}", authMiddleware(http.HandlerFunc(wsHandler.ServeWS)))
+	mux.HandleFunc("/ws/rooms/{id}", wsHandler.ServeWS)
+
+	mux.Handle("/", http.FileServer(http.Dir("static")))
 
 	addr := fmt.Sprintf(":%s", cfg.App.Port)
 	log.Printf("starting server on %s (env: %s)", addr, cfg.App.Env)

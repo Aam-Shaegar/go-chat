@@ -19,30 +19,43 @@ var upgrader = websocket.Upgrader{
 }
 
 type WSHandler struct {
-	hub         *ws.Hub
-	roomService *service.RoomService
-	userRepo    interface {
-		GetByID(ctx interface{}, id string) (interface{}, error)
-	}
+	hub          *ws.Hub
+	roomService  *service.RoomService
+	tokenService *service.TokenService
 }
 
 type WSHandlerDeps struct {
-	Hub         *ws.Hub
-	RoomService *service.RoomService
+	Hub          *ws.Hub
+	RoomService  *service.RoomService
+	TokenService *service.TokenService
 }
 
 func NewWSHandler(deps WSHandlerDeps) *WSHandler {
 	return &WSHandler{
-		hub:         deps.Hub,
-		roomService: deps.RoomService,
+		hub:          deps.Hub,
+		roomService:  deps.RoomService,
+		tokenService: deps.TokenService,
 	}
 }
 
 func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
-	userID, ok := GetUserID(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
+	tokenStr := r.URL.Query().Get("token")
+	var userID string
+
+	if tokenStr != "" {
+		claims, err := h.tokenService.Parse(tokenStr)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "invalid token")
+			return
+		}
+		userID = claims.UserID
+	} else {
+		id, ok := GetUserID(r)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		userID = id
 	}
 
 	username := r.URL.Query().Get("username")
