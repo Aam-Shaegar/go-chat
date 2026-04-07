@@ -30,6 +30,7 @@ func main() {
 	tokenService := service.NewTokenService(cfg.JWT)
 	authService := service.NewAuthService(userRepo, tokenService)
 	roomService := service.NewRoomService(roomRepo)
+	messageService := service.NewMessageService(messageRepo, roomRepo)
 
 	hub := ws.NewHub(messageRepo, userRepo, roomService)
 	go hub.Run()
@@ -37,6 +38,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler()
 	roomHandler := handler.NewRoomHandler(roomService, messageRepo)
+	messageHandler := handler.NewMessageHandler(messageService, hub)
 	wsHandler := handler.NewWSHandler(handler.WSHandlerDeps{
 		Hub:          hub,
 		RoomService:  roomService,
@@ -49,6 +51,7 @@ func main() {
 
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
+	mux.HandleFunc("POST /api/auth/refresh", authHandler.Refresh)
 
 	mux.Handle("GET /api/users/me", authMiddleware(http.HandlerFunc(userHandler.Me)))
 
@@ -58,6 +61,8 @@ func main() {
 	mux.Handle("GET /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.GetRoomByID)))
 	mux.Handle("POST /api/rooms/{id}/join", authMiddleware(http.HandlerFunc(roomHandler.Join)))
 	mux.Handle("GET /api/rooms/{id}/messages", authMiddleware(http.HandlerFunc(roomHandler.GetMessages)))
+	mux.Handle("DELETE /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.Delete)))
+	mux.Handle("DELETE 'api/rooms/{id}/messages/{messagesID}", authMiddleware(http.HandlerFunc(messageHandler.Delete)))
 
 	mux.HandleFunc("/ws/rooms/{id}", wsHandler.ServeWS)
 

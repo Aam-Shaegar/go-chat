@@ -93,6 +93,23 @@ func (r *RoomRepository) AddMember(ctx context.Context, roomID, userID string) e
 	return nil
 }
 
+func (r *RoomRepository) Delete(ctx context.Context, roomID string) error {
+	query := `DELETE FROM rooms WHERE id = $1`
+	if _, err := r.db.ExecContext(ctx, query, roomID); err != nil {
+		return fmt.Errorf("delete room: %w", err)
+	}
+	return nil
+}
+
+func (r *RoomRepository) GetOwnerID(ctx context.Context, roomID string) (string, error) {
+	var ownerID string
+	query := `SELECT owner_id FROM rooms WHERE id = $1`
+	if err := r.db.GetContext(ctx, &ownerID, query, roomID); err != nil {
+		return "", fmt.Errorf("get owner: %w", err)
+	}
+	return ownerID, nil
+}
+
 func (r *RoomRepository) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	var exists bool
 	query := `

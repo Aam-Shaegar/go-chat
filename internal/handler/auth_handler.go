@@ -71,3 +71,22 @@ func setRefreshCookie(w http.ResponseWriter, token string) {
 		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
 	})
 }
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "refresh token missing")
+		return
+	}
+	claims, err := h.authService.ValidateRefresh(cookie.Value)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid refresh token")
+		return
+	}
+	accessToken, err := h.authService.IssueAccess(claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to issue token")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"access_token": accessToken})
+}

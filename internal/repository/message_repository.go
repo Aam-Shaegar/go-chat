@@ -59,3 +59,47 @@ func (r *MessageRepository) ListByRoomID(ctx context.Context, roomID string, lim
 	}
 	return messages, nil
 }
+
+func (r *MessageRepository) GetMsgByID(ctx context.Context, messageID string) (domain.Message, error) {
+	var msg domain.Message
+	query := `
+		SELECT id, room_id, user_id, content, edited_at, created_at
+		FROM messages WHERE id = $1
+	`
+	if err := r.db.GetContext(ctx, &msg, query, messageID); err != nil {
+		return domain.Message{}, fmt.Errorf("get message: %w", err)
+	}
+	return msg, nil
+}
+
+func (r *MessageRepository) Delete(ctx context.Context, messageID string) error {
+	query := `
+		DELETE FROM messages WHERE id = $1
+	`
+	if _, err := r.db.ExecContext(ctx, query, messageID); err != nil {
+		return fmt.Errorf("delete message: %w", err)
+	}
+	return nil
+}
+
+func (r *MessageRepository) CountByRoom(ctx context.Context, roomID string, limit, offset int) ([]domain.Message, error) {
+	var messages []domain.Message
+	query := `
+		SELECT id, room_id, user_id, content, edited_at, created_at
+		FROM messages
+		WHERE room_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	if err := r.db.SelectContext(ctx, &messages, query, roomID, limit, offset); err != nil {
+		return nil, fmt.Errorf("list messages with offset: %w", err)
+	}
+
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	if messages == nil {
+		messages = []domain.Message{}
+	}
+	return messages, nil
+}

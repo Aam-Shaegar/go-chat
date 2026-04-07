@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"go-chat/internal/repository"
 	"go-chat/internal/service"
 	"log"
@@ -16,6 +17,24 @@ type RoomHandler struct {
 
 func NewRoomHandler(roomService *service.RoomService, messageRepo *repository.MessageRepository) *RoomHandler {
 	return &RoomHandler{roomService: roomService, messageRepo: messageRepo}
+}
+
+func (h *RoomHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	roomID := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
+	if roomID == "" {
+		writeError(w, http.StatusBadRequest, "room id is required")
+		return
+	}
+	if err := h.roomService.Delete(r.Context(), roomID, userID); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -118,9 +137,22 @@ func (h *RoomHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "you are not a member of this room")
 		return
 	}
+	limit := 50
+	offset := 0
 
-	messages, err := h.messageRepo.ListByRoomID(r.Context(), roomID, 50)
+	if v := r.URL.Query().Get("limit"); v != "" {
+		fmt.Sscanf(v, "%d", &limit)
+		if limit > 100 {
+			limit = 100
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		fmt.Sscanf(v, "%d", &offset)
+	}
+
+	messages, err := h.messageRepo.CountByRoom(r.Context(), roomID, limit, offset)
 	if err != nil {
+		log.Printf("GetMessages error: %s", err)
 		writeError(w, http.StatusInternalServerError, "failed to get messages")
 		return
 	}

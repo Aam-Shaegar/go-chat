@@ -83,3 +83,11 @@ func (s *AuthService) issueTokens(user domain.User) (domain.AuthResponse, string
 		AccessToken: accessToken,
 	}, refreshToken, nil
 }
+
+func (s *AuthService) ValidateRefresh(tokenStr string) (*Claims, error) {
+	return s.tokenService.Parse(tokenStr)
+}
+
+func (s *AuthService) IssueAccess(userID string) (string, error) {
+	return s.tokenService.GenerateAccess(userID)
+}

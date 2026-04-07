@@ -91,3 +91,22 @@ func (s *RoomService) Join(ctx context.Context, roomID, userID string) error {
 func (s *RoomService) IsMember(ctx context.Context, roomID, userID string) (bool, error) {
 	return s.roomRepo.IsMember(ctx, roomID, userID)
 }
+
+func (s *RoomService) Delete(ctx context.Context, roomID, userID string) error {
+	ownerID, err := s.roomRepo.GetOwnerID(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("room not found")
+	}
+	if ownerID != userID {
+		return fmt.Errorf("only room owner can delete the room")
+	}
+	if err := s.roomRepo.Delete(ctx, roomID); err != nil {
+		return fmt.Errorf("delete room: %w", err)
+	}
+
+	return nil
+}
+
+func (s *RoomService) GetOwnerID(ctx context.Context, roomID string) (string, error) {
+	return s.roomRepo.GetOwnerID(ctx, roomID)
+}

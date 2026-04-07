@@ -66,6 +66,8 @@ func (h *Hub) handleRegister(client *Client) {
 		},
 	}, client)
 
+	h.broadcastRoomStats(client.roomID)
+
 	log.Printf("client joined room %s (total: %d)", client.roomID, len(h.rooms[client.roomID]))
 }
 
@@ -88,6 +90,9 @@ func (h *Hub) handleUnregister(client *Client) {
 			}
 		}
 	}
+
+	h.broadcastRoomStats(client.roomID)
+
 	log.Printf("client left room %s", client.roomID)
 }
 
@@ -160,6 +165,24 @@ func (h *Hub) broadcastToRoom(roomID string, msg OutgoingMessage, exclude *Clien
 	}
 }
 
+func (h *Hub) BroadcastMessageDeleted(roomID, messageID string) {
+	h.broadcastToRoom(roomID, OutgoingMessage{
+		Type: TypeMessageDeleted,
+		Payload: MessageDeletedPayload{
+			MessageID: messageID,
+			RoomID:    roomID,
+		},
+	}, nil)
+}
+
 func (h *Hub) Register(client *Client) {
 	h.register <- client
+}
+
+func (h *Hub) broadcastRoomStats(roomID string) {
+	count := len(h.rooms[roomID])
+	h.broadcastToRoom(roomID, OutgoingMessage{
+		Type:    TypeRoomStats,
+		Payload: RoomStatsPayload{OnlineCount: count},
+	}, nil)
 }

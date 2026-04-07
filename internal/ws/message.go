@@ -5,13 +5,24 @@ import "go-chat/internal/domain"
 const (
 	TypeSendMessage = "send_message"
 	TypeTyping      = "typing"
+	TypeRoomStats   = "room_stats"
 
-	TypeNewMessage = "new_message"
-	TypeUserTyping = "user_typing"
-	TypeUserJoined = "user_joined"
-	TypeUserLeft   = "user_left"
-	TypeError      = "error"
+	TypeNewMessage     = "new_message"
+	TypeUserTyping     = "user_typing"
+	TypeUserJoined     = "user_joined"
+	TypeUserLeft       = "user_left"
+	TypeError          = "error"
+	TypeMessageDeleted = "message_deleted"
 )
+
+type RoomStatsPayload struct {
+	OnlineCount int `json:"online_count"`
+}
+
+type MessageDeletedPayload struct {
+	MessageID string `json:"message_id"`
+	RoomID    string `json:"room_id"`
+}
 
 type IncomingMessage struct {
 	Type    string `json:"type"`
