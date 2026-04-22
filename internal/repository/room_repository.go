@@ -120,3 +120,26 @@ func (r *RoomRepository) IsMember(ctx context.Context, roomID, userID string) (b
 	}
 	return exists, nil
 }
+
+func (r *RoomRepository) RemoveMember(ctx context.Context, roomID, userID string) error {
+	query := `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`
+	if _, err := r.db.ExecContext(ctx, query, roomID, userID); err != nil {
+		return fmt.Errorf("remove member: %w", err)
+	}
+	return nil
+}
+
+func (r *RoomRepository) ListMembers(ctx context.Context, roomID string) ([]domain.Member, error) {
+	var members []domain.Member
+	query := `
+        SELECT rm.user_id, u.username, rm.joined_at
+        FROM room_members rm
+        INNER JOIN users u ON u.id = rm.user_id
+        WHERE rm.room_id = $1
+        ORDER BY rm.joined_at ASC
+    `
+	if err := r.db.SelectContext(ctx, &members, query, roomID); err != nil {
+		return nil, fmt.Errorf("list members: %w", err)
+	}
+	return members, nil
+}

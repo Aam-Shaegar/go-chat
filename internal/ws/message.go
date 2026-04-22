@@ -13,6 +13,9 @@ const (
 	TypeUserLeft       = "user_left"
 	TypeError          = "error"
 	TypeMessageDeleted = "message_deleted"
+
+	TypeNewDM   = "new_dm"
+	TypeDMEvent = "dm_event"
 )
 
 type RoomStatsPayload struct {

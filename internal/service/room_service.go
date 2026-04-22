@@ -110,3 +110,36 @@ func (s *RoomService) Delete(ctx context.Context, roomID, userID string) error {
 func (s *RoomService) GetOwnerID(ctx context.Context, roomID string) (string, error) {
 	return s.roomRepo.GetOwnerID(ctx, roomID)
 }
+
+func (s *RoomService) Leave(ctx context.Context, roomID, userID string) error {
+	ownerID, err := s.roomRepo.GetOwnerID(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("room not found")
+	}
+	if ownerID == userID {
+		return fmt.Errorf("room owner cannot leave the room")
+	}
+	return s.roomRepo.RemoveMember(ctx, roomID, userID)
+}
+
+func (s *RoomService) KickMember(ctx context.Context, roomID, ownerID, targerID string) error {
+	owner, err := s.roomRepo.GetOwnerID(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("room not found")
+	}
+	if owner != ownerID {
+		return fmt.Errorf("only room owner can kick members")
+	}
+	if targerID == ownerID {
+		return fmt.Errorf("cannot kick yourself")
+	}
+	return s.roomRepo.RemoveMember(ctx, roomID, targerID)
+}
+
+func (s *RoomService) ListMembers(ctx context.Context, roomID, userID string) ([]domain.Member, error) {
+	isMember, err := s.roomRepo.IsMember(ctx, roomID, userID)
+	if err != nil || !isMember {
+		return nil, fmt.Errorf("you are not a member of this room")
+	}
+	return s.roomRepo.ListMembers(ctx, roomID)
+}

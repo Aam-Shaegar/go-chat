@@ -8,6 +8,11 @@ import (
 	"log"
 )
 
+type dmBroadcast struct {
+	toUserID string
+	msg      OutgoingMessage
+}
+
 type ClientMessage struct {
 	Client  *Client
 	Message IncomingMessage
@@ -15,6 +20,8 @@ type ClientMessage struct {
 
 type Hub struct {
 	rooms       map[string]map[*Client]bool
+	userClients map[string]map[*Client]bool
+	dmBroadcast chan dmBroadcast
 	register    chan *Client
 	unregister  chan *Client
 	process     chan ClientMessage
@@ -30,6 +37,8 @@ func NewHub(
 ) *Hub {
 	return &Hub{
 		rooms:       make(map[string]map[*Client]bool),
+		userClients: make(map[string]map[*Client]bool),
+		dmBroadcast: make(chan dmBroadcast, 256),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		process:     make(chan ClientMessage),
@@ -48,11 +57,28 @@ func (h *Hub) Run() {
 			h.handleUnregister(client)
 		case cm := <-h.process:
 			h.handleMessage(cm)
+		case dm := <-h.dmBroadcast:
+			if clients, ok := h.userClients[dm.toUserID]; ok {
+				for client := range clients {
+					select {
+					case client.send <- dm.msg:
+					default:
+						h.unregister <- client
+					}
+				}
+			}
 		}
+
 	}
 }
 
 func (h *Hub) handleRegister(client *Client) {
+
+	if h.userClients[client.userID] == nil {
+		h.userClients[client.userID] = make(map[*Client]bool)
+	}
+	h.userClients[client.userID][client] = true
+
 	if h.rooms[client.roomID] == nil {
 		h.rooms[client.roomID] = make(map[*Client]bool)
 	}
@@ -72,6 +98,14 @@ func (h *Hub) handleRegister(client *Client) {
 }
 
 func (h *Hub) handleUnregister(client *Client) {
+
+	if clients, ok := h.userClients[client.userID]; ok {
+		delete(clients, client)
+		if len(clients) == 0 {
+			delete(h.userClients, client.userID)
+		}
+	}
+
 	if clients, ok := h.rooms[client.roomID]; ok {
 		if _, ok := clients[client]; ok {
 			delete(clients, client)
@@ -159,8 +193,7 @@ func (h *Hub) broadcastToRoom(roomID string, msg OutgoingMessage, exclude *Clien
 		select {
 		case client.send <- msg:
 		default:
-			delete(clients, client)
-			close(client.send)
+			h.unregister <- client
 		}
 	}
 }
@@ -185,4 +218,14 @@ func (h *Hub) broadcastRoomStats(roomID string) {
 		Type:    TypeRoomStats,
 		Payload: RoomStatsPayload{OnlineCount: count},
 	}, nil)
+}
+
+func (h *Hub) BroadcastDM(toUserID string, msg interface{}) {
+	h.dmBroadcast <- dmBroadcast{
+		toUserID: toUserID,
+		msg: OutgoingMessage{
+			Type:    TypeNewDM,
+			Payload: msg,
+		},
+	}
 }

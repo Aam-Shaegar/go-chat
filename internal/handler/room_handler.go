@@ -137,13 +137,13 @@ func (h *RoomHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "you are not a member of this room")
 		return
 	}
-	limit := 50
+	limit := 100
 	offset := 0
 
 	if v := r.URL.Query().Get("limit"); v != "" {
 		fmt.Sscanf(v, "%d", &limit)
-		if limit > 100 {
-			limit = 100
+		if limit > 200 {
+			limit = 200
 		}
 	}
 	if v := r.URL.Query().Get("offset"); v != "" {
@@ -158,4 +158,60 @@ func (h *RoomHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, messages)
+}
+
+func (h *RoomHandler) Leave(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	roomID := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
+	roomID = strings.TrimSuffix(roomID, "/leave")
+
+	if err := h.roomService.Leave(r.Context(), roomID, userID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "left"})
+}
+
+func (h *RoomHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	roomID := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
+	roomID = strings.TrimSuffix(roomID, "/members")
+
+	members, err := h.roomService.ListMembers(r.Context(), roomID, userID)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, members)
+}
+
+func (h *RoomHandler) KickMember(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
+	parts := strings.Split(path, "/members/")
+	if len(parts) != 2 {
+		writeError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+	roomID := parts[0]
+	targetID := parts[1]
+
+	if err := h.roomService.KickMember(r.Context(), roomID, userID, targetID); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "kicked"})
 }
