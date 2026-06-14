@@ -1,134 +1,149 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"go-chat/internal/config"
-	"go-chat/internal/db"
-	"go-chat/internal/handler"
-	"go-chat/internal/repository"
-	"go-chat/internal/service"
-	"go-chat/internal/ws"
-	_ "net/http/pprof"
+	core_config "go-chat/internal/core/config"
+	core_logger "go-chat/internal/core/logger"
+	core_pgx_pool "go-chat/internal/core/repository/postgres/pool/pgx"
+	core_http_middleware "go-chat/internal/core/transport/http/middleware"
+	core_http_server "go-chat/internal/core/transport/http/server"
+
+	jwt_repository_postgres "go-chat/internal/features/jwt/repository/postgres"
+	jwt_service "go-chat/internal/features/jwt/service"
+	jwt_transport_http "go-chat/internal/features/jwt/transport/http"
+
+	users_repository_postgres "go-chat/internal/features/users/repository/postgres"
+	users_service "go-chat/internal/features/users/service"
+	users_transport_http "go-chat/internal/features/users/transport/http"
+
+	rooms_repository_postgres "go-chat/internal/features/rooms/repository/postgres"
+	rooms_service "go-chat/internal/features/rooms/service"
+	rooms_transport_http "go-chat/internal/features/rooms/transport/http"
+
+	ws_hub "go-chat/internal/features/ws/hub"
+	ws_repository_postgres "go-chat/internal/features/ws/repository/postgres"
+	ws_service "go-chat/internal/features/ws/service"
+	ws_transport_http "go-chat/internal/features/ws/transport/http"
+
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 func main() {
-	cfg := config.MustLoad()
+	cfg := core_config.NewConfigMust()
+	time.Local = cfg.TimeZone
 
-	database, err := db.NewPostgres(cfg.DB)
+	ctx, cancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer cancel()
+
+	fmt.Println("GoChat app starting")
+
+	logger, err := core_logger.NewLogger(core_logger.NewConfigMust())
 	if err != nil {
-		log.Fatalf("db init: %s", err)
+		fmt.Println("failed to init application logger:", err)
+		os.Exit(1)
 	}
-	defer database.Close()
-	log.Println("connected to postgres")
+	defer logger.Close()
 
-	userRepo := repository.NewUserRepository(database)
-	roomRepo := repository.NewRoomRepository(database)
-	messageRepo := repository.NewMessageRepository(database)
-	inviteRepo := repository.NewInviteRepository(database)
-	dmRepo := repository.NewDMRepository(database)
-	readsRepo := repository.NewReadsRepository(database)
+	logger.Debug("application time zone", zap.Any("zone", time.Local))
 
-	tokenService := service.NewTokenService(cfg.JWT)
-	authService := service.NewAuthService(userRepo, tokenService)
-	roomService := service.NewRoomService(roomRepo)
-	messageService := service.NewMessageService(messageRepo, roomRepo)
-	inviteService := service.NewInviteService(inviteRepo, roomRepo)
-	dmService := service.NewDMService(dmRepo, userRepo)
-
-	hub := ws.NewHub(messageRepo, userRepo, roomService)
-	go hub.Run()
-
-	authHandler := handler.NewAuthHandler(authService)
-	userHandler := handler.NewUserHandler(userRepo)
-	roomHandler := handler.NewRoomHandler(roomService, messageRepo)
-	messageHandler := handler.NewMessageHandler(messageService, hub)
-	inviteHandler := handler.NewInviteHandler(inviteService)
-	dmHandler := handler.NewDMHandler(dmService, hub)
-	readsHandler := handler.NewReadsHandler(readsRepo)
-	wsHandler := handler.NewWSHandler(handler.WSHandlerDeps{
-		Hub:          hub,
-		RoomService:  roomService,
-		TokenService: tokenService,
-	})
-
-	authMiddleware := handler.AuthMiddleware(tokenService)
-
-	go func() {
-		log.Println("starting pprof on :6060")
-		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			log.Printf("pprof error: %v", err)
-		}
-	}()
-
-	mux := http.NewServeMux()
-
-	//Auth
-	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
-	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
-	mux.HandleFunc("POST /api/auth/refresh", authHandler.Refresh)
-
-	//users
-	mux.Handle("GET /api/users/me", authMiddleware(http.HandlerFunc(userHandler.Me)))
-	mux.Handle("GET /api/users", authMiddleware(http.HandlerFunc(userHandler.ListAll)))
-
-	//rooms
-	mux.Handle("POST /api/rooms", authMiddleware(http.HandlerFunc(roomHandler.Create)))
-	mux.Handle("GET /api/rooms", authMiddleware(http.HandlerFunc(roomHandler.ListPublic)))
-	mux.Handle("GET /api/rooms/my", authMiddleware(http.HandlerFunc(roomHandler.ListMy)))
-	mux.Handle("GET /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.GetRoomByID)))
-	mux.Handle("DELETE /api/rooms/{id}", authMiddleware(http.HandlerFunc(roomHandler.Delete)))
-	mux.Handle("POST /api/rooms/{id}/join", authMiddleware(http.HandlerFunc(roomHandler.Join)))
-	mux.Handle("POST /api/rooms/{id}/leave", authMiddleware(http.HandlerFunc(roomHandler.Leave)))
-	mux.Handle("GET /api/rooms/{id}/messages", authMiddleware(http.HandlerFunc(roomHandler.GetMessages)))
-	mux.Handle("GET /api/rooms/{id}/members", authMiddleware(http.HandlerFunc(roomHandler.ListMembers)))
-	mux.Handle("DELETE /api/rooms/{id}/members/{userId}", authMiddleware(http.HandlerFunc(roomHandler.KickMember)))
-	mux.Handle("POST /api/rooms/{id}/invites", authMiddleware(http.HandlerFunc(inviteHandler.Create)))
-	mux.Handle("GET /api/rooms/{id}/invites", authMiddleware(http.HandlerFunc(inviteHandler.List)))
-
-	//messages
-	mux.Handle("DELETE /api/rooms/{id}/messages/{messageId}", authMiddleware(http.HandlerFunc(messageHandler.Delete)))
-
-	//invites
-	mux.Handle("GET /api/invites/{token}", authMiddleware(http.HandlerFunc(inviteHandler.GetInfo)))
-	mux.Handle("POST /api/invites/{token}/accept", authMiddleware(http.HandlerFunc(inviteHandler.Accept)))
-	mux.Handle("DELETE /api/invites/{token}", authMiddleware(http.HandlerFunc(inviteHandler.Delete)))
-
-	//reads
-	mux.Handle("POST /api/rooms/{id}/read", authMiddleware(http.HandlerFunc(readsHandler.Upsert)))
-	mux.Handle("GET /api/rooms/{id}/read", authMiddleware(http.HandlerFunc(readsHandler.Get)))
-	mux.Handle("GET /api/reads/unread", authMiddleware(http.HandlerFunc(readsHandler.GetUnreadCounts)))
-
-	//dm
-	mux.Handle("GET /api/dm", authMiddleware(http.HandlerFunc(dmHandler.GetConversations)))
-	mux.Handle("GET /api/dm/{userId}/messages", authMiddleware(http.HandlerFunc(dmHandler.GetHistory)))
-	mux.Handle("POST /api/dm/{userId}/messages", authMiddleware(http.HandlerFunc(dmHandler.Send)))
-	mux.Handle("POST /api/dm/{userId}/read", authMiddleware(http.HandlerFunc(dmHandler.MarkRead)))
-	mux.Handle("GET /api/dm/unread", authMiddleware(http.HandlerFunc(dmHandler.GetUnreadCounts)))
-	mux.Handle("GET /api/dm/{userId}/read", authMiddleware(http.HandlerFunc(dmHandler.GetLastRead)))
-
-	//websocket
-	mux.HandleFunc("/ws/rooms/{id}", wsHandler.ServeWS)
-
-	//static
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			fs := http.FileServer(http.Dir("static"))
-			if _, err := os.Stat("static" + r.URL.Path); err == nil {
-				fs.ServeHTTP(w, r)
-				return
-			}
-		}
-		http.ServeFile(w, r, "static/index.html")
-	})
-
-	addr := fmt.Sprintf(":%s", cfg.App.Port)
-	log.Printf("starting server on %s (env: %s)", addr, cfg.App.Env)
-
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server error: %s", err)
+	// --- Postgres ---
+	logger.Debug("initializing postgres connection pool")
+	pool, err := core_pgx_pool.NewConnectionPool(core_pgx_pool.NewConfigMust(), ctx)
+	if err != nil {
+		logger.Fatal("failed to init postgres connection pool", zap.Error(err))
 	}
+	defer pool.Close()
+
+	// --- Redis ---
+	logger.Debug("initializing redis client")
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: cfg.RedisAddr,
+	})
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		logger.Fatal("failed to ping redis", zap.Error(err))
+	}
+	defer redisClient.Close()
+
+	// --- Repositories ---
+	jwtRepo := jwt_repository_postgres.NewJwtRepository(pool)
+	usersRepo := users_repository_postgres.NewUsersRepository(pool)
+	roomsRepo := rooms_repository_postgres.NewRoomsRepository(pool)
+	wsRepo := ws_repository_postgres.NewWSRepository(pool)
+
+	// --- Services ---
+	jwtSvc := jwt_service.NewJwtService(jwtRepo, usersRepo, cfg)
+	usersSvc := users_service.NewUsersService(usersRepo, jwtSvc)
+	roomsSvc := rooms_service.NewRoomsService(roomsRepo)
+
+	// --- WebSocket Hub ---
+	hub := ws_hub.NewHub(redisClient, logger)
+	go hub.Run(ctx)
+
+	wsSvc := ws_service.NewWSService(wsRepo, hub)
+
+	// --- HTTP Handlers ---
+	jwtHandler := jwt_transport_http.NewJwtHTTPHandler(jwtSvc, cfg.JwtRefreshTTL)
+	usersHandler := users_transport_http.NewUsersHTTPHandler(usersSvc, cfg)
+	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc)
+	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo)
+
+	// --- Auth middleware ---
+	authMiddleware := core_http_middleware.Auth(jwtSvc)
+
+	// --- Router ---
+	apiRouter := core_http_server.NewAPIVersionRouter(core_http_server.ApiVersion1)
+
+	// Публичные роуты
+	publicRoutes := jwtHandler.Routes()
+	for _, route := range usersHandler.Routes() {
+		if route.Path == "/auth/register" || route.Path == "/auth/login" {
+			publicRoutes = append(publicRoutes, route)
+		}
+	}
+	apiRouter.RegisterRoutes(publicRoutes...)
+
+	// Защищённые роуты users
+	for _, route := range usersHandler.Routes() {
+		if route.Path != "/auth/register" && route.Path != "/auth/login" {
+			route.Middleware = append(route.Middleware, authMiddleware)
+			apiRouter.RegisterRoutes(route)
+		}
+	}
+
+	// Rooms роуты (все защищённые — middleware внутри Routes())
+	apiRouter.RegisterRoutes(roomsHandler.Routes(authMiddleware)...)
+
+	// WS роуты (middleware внутри Routes())
+	apiRouter.RegisterRoutes(wsHandler.Routes(authMiddleware)...)
+
+	// --- HTTP Server ---
+	logger.Debug("initializing http server")
+	httpServer := core_http_server.NewHTTPServer(
+		core_http_server.NewConfigMust(),
+		logger,
+		core_http_middleware.RequestID(),
+		core_http_middleware.Logger(logger),
+		core_http_middleware.Trace(),
+		core_http_middleware.Panic(),
+	)
+	httpServer.RegisterAPIRouters(apiRouter)
+
+	if err := httpServer.Run(ctx); err != nil {
+		logger.Error("HTTP server run error", zap.Error(err))
+	}
+
+	// Graceful shutdown WS
+	logger.Debug("shutting down websocket hub")
+	hub.Shutdown()
+	logger.Debug("shutdown complete")
 }
