@@ -17,6 +17,9 @@ import (
 	jwt_repository_postgres "go-chat/internal/features/jwt/repository/postgres"
 	jwt_service "go-chat/internal/features/jwt/service"
 	jwt_transport_http "go-chat/internal/features/jwt/transport/http"
+	messages_repository_postgres "go-chat/internal/features/messages/repository/postgres"
+	messages_service "go-chat/internal/features/messages/service"
+	messages_transport_http "go-chat/internal/features/messages/transport/http"
 
 	users_repository_postgres "go-chat/internal/features/users/repository/postgres"
 	users_service "go-chat/internal/features/users/service"
@@ -79,11 +82,13 @@ func main() {
 	usersRepo := users_repository_postgres.NewUsersRepository(pool)
 	roomsRepo := rooms_repository_postgres.NewRoomsRepository(pool)
 	wsRepo := ws_repository_postgres.NewWSRepository(pool)
+	messagesRepo := messages_repository_postgres.NewMessagesRepository(pool)
 
 	// --- Services ---
 	jwtSvc := jwt_service.NewJwtService(jwtRepo, usersRepo, cfg)
 	usersSvc := users_service.NewUsersService(usersRepo, jwtSvc)
 	roomsSvc := rooms_service.NewRoomsService(roomsRepo)
+	messagesSvc := messages_service.NewMessagesService(messagesRepo, roomsRepo)
 
 	// --- WebSocket Hub ---
 	hub := ws_hub.NewHub(redisClient, logger)
@@ -96,6 +101,7 @@ func main() {
 	usersHandler := users_transport_http.NewUsersHTTPHandler(usersSvc, cfg)
 	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc)
 	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo)
+	messagesHandler := messages_transport_http.NewMessagesHandler(messagesSvc)
 
 	// --- Auth middleware ---
 	authMiddleware := core_http_middleware.Auth(jwtSvc)
@@ -122,6 +128,9 @@ func main() {
 
 	// Rooms роуты (все защищённые — middleware внутри Routes())
 	apiRouter.RegisterRoutes(roomsHandler.Routes(authMiddleware)...)
+
+	// Message роуты (защищённые middleware)
+	apiRouter.RegisterRoutes(messagesHandler.Routes(authMiddleware)...)
 
 	// WS роуты (middleware внутри Routes())
 	apiRouter.RegisterRoutes(wsHandler.Routes(authMiddleware)...)
