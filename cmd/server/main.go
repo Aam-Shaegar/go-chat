@@ -20,6 +20,9 @@ import (
 	messages_repository_postgres "go-chat/internal/features/messages/repository/postgres"
 	messages_service "go-chat/internal/features/messages/service"
 	messages_transport_http "go-chat/internal/features/messages/transport/http"
+	reads_repository_postgres "go-chat/internal/features/reads/repository/postgres"
+	reads_service "go-chat/internal/features/reads/service"
+	reads_transport_http "go-chat/internal/features/reads/transport/http"
 
 	users_repository_postgres "go-chat/internal/features/users/repository/postgres"
 	users_service "go-chat/internal/features/users/service"
@@ -83,12 +86,14 @@ func main() {
 	roomsRepo := rooms_repository_postgres.NewRoomsRepository(pool)
 	wsRepo := ws_repository_postgres.NewWSRepository(pool)
 	messagesRepo := messages_repository_postgres.NewMessagesRepository(pool)
+	readsRepo := reads_repository_postgres.NewReadsRepository(pool)
 
 	// --- Services ---
 	jwtSvc := jwt_service.NewJwtService(jwtRepo, usersRepo, cfg)
 	usersSvc := users_service.NewUsersService(usersRepo, jwtSvc)
 	roomsSvc := rooms_service.NewRoomsService(roomsRepo)
 	messagesSvc := messages_service.NewMessagesService(messagesRepo, roomsRepo)
+	readSvc := reads_service.NewReadsService(readsRepo, roomsRepo)
 
 	// --- WebSocket Hub ---
 	hub := ws_hub.NewHub(redisClient, logger)
@@ -102,6 +107,7 @@ func main() {
 	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc)
 	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo)
 	messagesHandler := messages_transport_http.NewMessagesHandler(messagesSvc)
+	readsHandler := reads_transport_http.NewReadsHandler(readSvc)
 
 	// --- Auth middleware ---
 	authMiddleware := core_http_middleware.Auth(jwtSvc)
@@ -134,6 +140,9 @@ func main() {
 
 	// WS роуты (middleware внутри Routes())
 	apiRouter.RegisterRoutes(wsHandler.Routes(authMiddleware)...)
+
+	// Reads роуты (защищённые)
+	apiRouter.RegisterRoutes(readsHandler.Routes(authMiddleware)...)
 
 	// --- HTTP Server ---
 	logger.Debug("initializing http server")
