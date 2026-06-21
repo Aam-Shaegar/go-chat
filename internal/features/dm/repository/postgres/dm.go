@@ -13,12 +13,11 @@ import (
 )
 
 // FindDM ищет существующий DM между двумя пользователями.
-// Возвращает ErrNoRows если не найден.
+// Возвращает ErrNoRows, если не найден.
 func (r *DMRepository) FindDM(ctx context.Context, userID1, userID2 string) (domain_models.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
-	// Комната is_dm=true где состоят оба пользователя
 	query := `
 		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at
 		FROM gochat.rooms r
@@ -39,7 +38,7 @@ func (r *DMRepository) FindDM(ctx context.Context, userID1, userID2 string) (dom
 	return roomToDomain(m), nil
 }
 
-// CreateDM атомарно создаёт DM комнату и добавляет обоих участников.
+// CreateDM создаёт DM-комнату и добавляет двух участников в одной транзакции.
 func (r *DMRepository) CreateDM(ctx context.Context, userID1, userID2 string) (domain_models.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
@@ -50,7 +49,7 @@ func (r *DMRepository) CreateDM(ctx context.Context, userID1, userID2 string) (d
 	}
 	defer tx.Rollback(ctx)
 
-	// Создаём комнату — name пустой для DM, идентификация по участникам
+	// Для DM имя не используется, идентификация идёт по участникам
 	roomQuery := `
 		INSERT INTO gochat.rooms (id, name, description, is_private, is_dm, owner_id, created_at)
 		VALUES ($1, '', '', true, true, $2, $3)
@@ -64,7 +63,6 @@ func (r *DMRepository) CreateDM(ctx context.Context, userID1, userID2 string) (d
 		return domain_models.Room{}, fmt.Errorf("insert dm room: %w", err)
 	}
 
-	// Добавляем обоих участников как member (в DM нет ролей)
 	memberQuery := `
 		INSERT INTO gochat.room_members (room_id, user_id, role)
 		VALUES ($1, $2, 'member'), ($1, $3, 'member');
@@ -80,7 +78,7 @@ func (r *DMRepository) CreateDM(ctx context.Context, userID1, userID2 string) (d
 	return roomToDomain(m), nil
 }
 
-// GetUserDMs возвращает все DM комнаты пользователя.
+// GetUserDMs возвращает все DM-комнаты пользователя.
 func (r *DMRepository) GetUserDMs(ctx context.Context, userID string) ([]domain_models.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()

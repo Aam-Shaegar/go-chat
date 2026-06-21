@@ -28,7 +28,6 @@ func (h *JwtHTTPHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Устанавливаем новый refresh token в cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    newRefreshToken,

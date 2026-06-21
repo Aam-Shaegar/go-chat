@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
-// MarkRead сохраняет или обновляет last_read_at для пользователя в комнате.
-// UPSERT — если записи нет, создаёт; если есть, обновляет только если новое время позже.
+// MarkRead обновляет время последнего прочтения для пользователя в комнате.
+// Работает как UPSERT: вставляет запись при отсутствии, иначе обновляет,
+// только если новое время больше текущего.
 func (r *ReadsRepository) MarkRead(ctx context.Context, roomID, userID string, lastReadAt time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
@@ -27,12 +28,12 @@ func (r *ReadsRepository) MarkRead(ctx context.Context, roomID, userID string, l
 }
 
 // GetUnreadCounts возвращает количество непрочитанных сообщений
-// по всем комнатам где состоит пользователь.
+// по всем комнатам, в которых состоит пользователь.
 func (r *ReadsRepository) GetUnreadCounts(ctx context.Context, userID string) (map[string]int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
-	// LEFT JOIN с room_reads — если записи нет, считаем все сообщения непрочитанными
+	// Если запись в room_reads отсутствует — считаем все сообщения непрочитанными
 	query := `
 		SELECT
 			m.room_id,
@@ -67,7 +68,7 @@ func (r *ReadsRepository) GetUnreadCounts(ctx context.Context, userID string) (m
 	return counts, nil
 }
 
-// GetUnreadCount возвращает количество непрочитанных для одной комнаты.
+// GetUnreadCount возвращает количество непрочитанных сообщений для одной комнаты.
 func (r *ReadsRepository) GetUnreadCount(ctx context.Context, roomID, userID string) (int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()

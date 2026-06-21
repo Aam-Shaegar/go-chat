@@ -63,7 +63,6 @@ func (h *Hub) Run(ctx context.Context) {
 }
 
 // Shutdown закрывает всех клиентов и ждёт завершения их горутин.
-// Вызывать после отмены ctx переданного в Run.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
 	clients := make([]*ws_client.Client, 0)

@@ -59,7 +59,6 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Парсим курсор — Unix timestamp в миллисекундах
 	var before *time.Time
 	if raw := r.URL.Query().Get("before"); raw != "" {
 		ms, err := strconv.ParseInt(raw, 10, 64)
@@ -74,7 +73,6 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		before = &t
 	}
 
-	// Парсим limit
 	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		l, err := strconv.Atoi(raw)
@@ -94,7 +92,6 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Конвертируем курсор в Unix ms для клиента
 	type response struct {
 		Messages   interface{} `json:"messages"`
 		NextCursor *int64      `json:"next_cursor,omitempty"`

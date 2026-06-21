@@ -13,7 +13,7 @@ import (
 	core_http_response "go-chat/internal/core/transport/http/response"
 )
 
-// --- Request/Response types ---
+// Request/Response types
 
 type createRoomRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=64"`
@@ -30,7 +30,7 @@ type updateRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=admin member"`
 }
 
-// --- Handlers ---
+// Handlers
 
 func (h *RoomsHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

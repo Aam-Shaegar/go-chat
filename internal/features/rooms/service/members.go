@@ -55,11 +55,9 @@ func (s *RoomsService) KickMember(ctx context.Context, roomID, requesterID, targ
 	if err != nil {
 		return fmt.Errorf("get target member: %w", err)
 	}
-	// Нельзя кикнуть владельца комнаты — комната останется без владельца
 	if target.IsOwner() {
 		return fmt.Errorf("cannot kick room owner: %w", core_error.ErrUnauthorized)
 	}
-	// Admin не может кикнуть другого admin — только owner может
 	if target.Role == domain_models.MemberRoleAdmin && !requester.IsOwner() {
 		return fmt.Errorf("only owner can kick admins: %w", core_error.ErrUnauthorized)
 	}
@@ -78,11 +76,9 @@ func (s *RoomsService) UpdateMemberRole(ctx context.Context, roomID, requesterID
 	if err != nil {
 		return fmt.Errorf("get target: %w", err)
 	}
-	// Нельзя менять роль владельца
 	if target.IsOwner() {
 		return fmt.Errorf("cannot change owner role: %w", core_error.ErrInvalidArgument)
 	}
-	// Нельзя назначить роль owner через этот метод
 	if role == domain_models.MemberRoleOwner {
 		return fmt.Errorf("cannot assign owner role: %w", core_error.ErrInvalidArgument)
 	}

@@ -41,18 +41,16 @@ func (s *RoomsService) CreateInvite(ctx context.Context, roomID, userID string, 
 }
 
 func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
-	// 1. Получаем инвайт чтобы узнать roomID
 	invite, err := s.repo.GetInviteByToken(ctx, token)
 	if err != nil {
 		return domain_models.Room{}, fmt.Errorf("invite not found: %w", core_error.ErrNotFound)
 	}
 
-	// 2. Проверяем валидность инвайта до любых изменений
 	if !invite.CanBeUsed() {
-		return domain_models.Room{}, fmt.Errorf("invite is expired, exhausted or inactive: %w", core_error.ErrInvalidArgument)
+		return domain_models.Room{}, fmt.Errorf("invite expired, exhausted or inactive: %w", core_error.ErrInvalidArgument)
 	}
 
-	// 3. Проверяем членство ДО инкремента — не списываем использование зря
+	// Проверяем членство до инкремента, чтобы не списать использование зря
 	alreadyMember, err := s.repo.IsMember(ctx, invite.RoomID, userID)
 	if err != nil {
 		return domain_models.Room{}, fmt.Errorf("check membership: %w", err)
@@ -61,12 +59,10 @@ func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (
 		return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
 	}
 
-	// 4. Атомарно инкрементируем — защита от race condition при параллельных вызовах
 	if err := s.repo.TryIncrementInviteUses(ctx, token); err != nil {
 		return domain_models.Room{}, fmt.Errorf("invite exhausted or inactive: %w", core_error.ErrInvalidArgument)
 	}
 
-	// 5. Добавляем участника
 	if err := s.repo.AddMember(ctx, invite.RoomID, userID, domain_models.MemberRoleMember); err != nil {
 		return domain_models.Room{}, fmt.Errorf("add member: %w", err)
 	}

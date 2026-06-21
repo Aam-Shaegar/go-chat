@@ -63,9 +63,8 @@ func (r *JwtRepository) RevokeRefreshToken(ctx context.Context, tokenHash string
 	return nil
 }
 
-// ReplaceRefreshToken атомарно отзывает старый токен и сохраняет новый.
-// Если любая из операций падает — транзакция откатывается,
-// клиент остаётся со старым токеном и может повторить запрос.
+// ReplaceRefreshToken атомарно заменяет старый refresh-токен на новый.
+// При ошибке транзакция откатывается, клиент может повторить запрос.
 func (r *JwtRepository) ReplaceRefreshToken(ctx context.Context, oldTokenHash, userID, newTokenHash string, expiresAt time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
@@ -76,7 +75,6 @@ func (r *JwtRepository) ReplaceRefreshToken(ctx context.Context, oldTokenHash, u
 	}
 	defer tx.Rollback(ctx)
 
-	// Сначала сохраняем новый
 	insertQuery := `
 		INSERT INTO gochat.refresh_tokens (id, user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4);
@@ -85,7 +83,6 @@ func (r *JwtRepository) ReplaceRefreshToken(ctx context.Context, oldTokenHash, u
 		return fmt.Errorf("insert new refresh token: %w", err)
 	}
 
-	// Потом отзываем старый
 	deleteQuery := `DELETE FROM gochat.refresh_tokens WHERE token_hash=$1;`
 	tag, err := tx.Exec(ctx, deleteQuery, oldTokenHash)
 	if err != nil {

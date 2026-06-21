@@ -45,13 +45,12 @@ func (r *RoomsRepository) GetInviteByToken(ctx context.Context, token string) (d
 	return invite, nil
 }
 
-// TryIncrementInviteUses атомарно инкрементирует uses только если uses < max_uses.
-// Возвращает ErrNoRows если инвайт исчерпан или не найден — защита от race condition.
+// TryIncrementInviteUses атомарно инкрементирует uses с проверкой лимита.
+// Возвращает ErrNoRows, если инвайт исчерпан, истёк или неактивен.
 func (r *RoomsRepository) TryIncrementInviteUses(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
-	// Атомарный UPDATE с проверкой условия — параллельные вызовы не превысят max_uses
 	query := `
 		UPDATE gochat.room_invites
 		SET uses = uses + 1
@@ -70,7 +69,7 @@ func (r *RoomsRepository) TryIncrementInviteUses(ctx context.Context, token stri
 	return nil
 }
 
-// DeactivateInvite — деактивировать может создатель инвайта ИЛИ владелец комнаты
+// DeactivateInvite отключает инвайт. Может выполнить создатель инвайта или владелец комнаты.
 func (r *RoomsRepository) DeactivateInvite(ctx context.Context, token, userID string) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()

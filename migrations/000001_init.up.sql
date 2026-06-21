@@ -2,7 +2,6 @@ CREATE SCHEMA IF NOT EXISTS gochat;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users
 CREATE TABLE IF NOT EXISTS gochat.users (
     id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     username   VARCHAR(32)  NOT NULL UNIQUE,
@@ -15,7 +14,6 @@ CREATE TABLE IF NOT EXISTS gochat.users (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email    ON gochat.users(email);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON gochat.users(username);
 
--- Refresh tokens
 CREATE TABLE IF NOT EXISTS gochat.refresh_tokens (
     id         UUID        PRIMARY KEY,
     user_id    UUID        REFERENCES gochat.users(id) ON DELETE CASCADE,
@@ -27,10 +25,8 @@ CREATE TABLE IF NOT EXISTS gochat.refresh_tokens (
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON gochat.refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires  ON gochat.refresh_tokens(expires_at);
 
--- Roles
 CREATE TYPE gochat.member_role AS ENUM ('owner', 'admin', 'member');
 
--- Rooms
 CREATE TABLE IF NOT EXISTS gochat.rooms (
     id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        VARCHAR(64)  NOT NULL,
@@ -41,7 +37,6 @@ CREATE TABLE IF NOT EXISTS gochat.rooms (
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
--- Room members
 CREATE TABLE IF NOT EXISTS gochat.room_members (
     room_id   UUID               NOT NULL REFERENCES gochat.rooms(id) ON DELETE CASCADE,
     user_id   UUID               NOT NULL REFERENCES gochat.users(id) ON DELETE CASCADE,
@@ -52,7 +47,6 @@ CREATE TABLE IF NOT EXISTS gochat.room_members (
 
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON gochat.room_members(user_id);
 
--- Room invites
 CREATE TABLE IF NOT EXISTS gochat.room_invites (
     id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     room_id    UUID        NOT NULL REFERENCES gochat.rooms(id) ON DELETE CASCADE,
@@ -67,7 +61,6 @@ CREATE TABLE IF NOT EXISTS gochat.room_invites (
 
 CREATE INDEX IF NOT EXISTS idx_room_invites_token ON gochat.room_invites(token);
 
--- Messages
 CREATE TABLE IF NOT EXISTS gochat.messages (
     id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     room_id      UUID        NOT NULL REFERENCES gochat.rooms(id) ON DELETE CASCADE,
@@ -83,7 +76,6 @@ CREATE TABLE IF NOT EXISTS gochat.messages (
 CREATE INDEX IF NOT EXISTS idx_messages_room_created ON gochat.messages(room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_reply_to     ON gochat.messages(reply_to_id);
 
--- Message reactions
 CREATE TABLE IF NOT EXISTS gochat.message_reactions (
     message_id UUID        NOT NULL REFERENCES gochat.messages(id) ON DELETE CASCADE,
     user_id    UUID        NOT NULL REFERENCES gochat.users(id) ON DELETE CASCADE,

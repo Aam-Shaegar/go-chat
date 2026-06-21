@@ -8,7 +8,7 @@ import (
 type EventType string
 
 const (
-	// Клиент → Сервер
+	// Клиент -> Сервер
 	EventTypeSendMessage    EventType = "send_message"
 	EventTypeEditMessage    EventType = "edit_message"
 	EventTypeDeleteMessage  EventType = "delete_message"
@@ -16,7 +16,7 @@ const (
 	EventTypeRemoveReaction EventType = "remove_reaction"
 	EventTypeTyping         EventType = "typing"
 
-	// Сервер → Клиент
+	// Сервер -> Клиент
 	EventTypeNewMessage      EventType = "new_message"
 	EventTypeMessageEdited   EventType = "message_edited"
 	EventTypeMessageDeleted  EventType = "message_deleted"
@@ -28,19 +28,19 @@ const (
 	EventTypeError           EventType = "error"
 )
 
-// IncomingEvent — входящее событие от клиента
+// IncomingEvent - входящее событие от клиента
 type IncomingEvent struct {
 	Type    EventType       `json:"type"`
-	Payload json.RawMessage `json:"payload"` // json.RawMessage а не []byte — не кодируется в base64
+	Payload json.RawMessage `json:"payload"` // json.RawMessage а не []byte - не кодируется в base64
 }
 
-// OutgoingEvent — исходящее событие клиенту
+// OutgoingEvent - исходящее событие клиенту
 type OutgoingEvent struct {
 	Type    EventType `json:"type"`
 	Payload any       `json:"payload"`
 }
 
-// --- Payloads клиент → сервер ---
+// Payloads клиент -> сервер
 
 type SendMessagePayload struct {
 	Content   string  `json:"content"`
@@ -70,7 +70,7 @@ type TypingPayload struct {
 	RoomID string `json:"room_id"`
 }
 
-// --- Payloads сервер → клиент ---
+// Payloads сервер -> клиент
 
 type NewMessagePayload struct {
 	ID          string    `json:"id"`

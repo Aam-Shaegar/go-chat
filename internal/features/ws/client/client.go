@@ -59,7 +59,7 @@ func (c *Client) Wait() {
 	c.wg.Wait()
 }
 
-// SendEvent отправляет событие клиенту — не блокирует, не паникует
+// SendEvent отправляет событие клиенту
 func (c *Client) SendEvent(event ws_domain.OutgoingEvent) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -78,7 +78,7 @@ func (c *Client) SendEvent(event ws_domain.OutgoingEvent) {
 }
 
 // ReadPump читает сообщения от клиента.
-// Завершение → закрывает канал → WritePump завершается.
+// Завершение -> закрывает канал -> WritePump завершается.
 func (c *Client) ReadPump(
 	handle func(client *Client, event ws_domain.IncomingEvent),
 	onClose func(client *Client),
@@ -131,7 +131,6 @@ func (c *Client) ReadPump(
 }
 
 // WritePump пишет сообщения клиенту.
-// Запускать горутиной ДО ReadPump.
 func (c *Client) WritePump() {
 	c.wg.Add(1)
 	ticker := time.NewTicker(pingInterval)

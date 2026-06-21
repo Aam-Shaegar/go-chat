@@ -34,22 +34,19 @@ func (s *DMService) OpenDM(ctx context.Context, requesterID, targetUserID string
 		return domain_models.Room{}, fmt.Errorf("cannot open DM with yourself")
 	}
 
-	// Проверяем что target пользователь существует
+	// Проверяем, что целевой пользователь существует
 	if _, err := s.userRepo.GetUser(ctx, targetUserID); err != nil {
 		return domain_models.Room{}, fmt.Errorf("target user not found: %w", err)
 	}
 
-	// Ищем существующий DM
 	room, err := s.repo.FindDM(ctx, requesterID, targetUserID)
 	if err == nil {
-		// Уже существует — возвращаем
 		return room, nil
 	}
 	if !errors.Is(err, core_postgres_pool.ErrNoRows) {
 		return domain_models.Room{}, fmt.Errorf("find dm: %w", err)
 	}
 
-	// Создаём новый DM
 	return s.repo.CreateDM(ctx, requesterID, targetUserID)
 }
 

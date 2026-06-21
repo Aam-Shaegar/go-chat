@@ -65,7 +65,7 @@ func main() {
 
 	logger.Debug("application time zone", zap.Any("zone", time.Local))
 
-	// --- Postgres ---
+	// Postgres
 	logger.Debug("initializing postgres connection pool")
 	pool, err := core_pgx_pool.NewConnectionPool(core_pgx_pool.NewConfigMust(), ctx)
 	if err != nil {
@@ -73,7 +73,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	// --- Redis ---
+	// Redis
 	logger.Debug("initializing redis client")
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: cfg.RedisAddr,
@@ -83,7 +83,7 @@ func main() {
 	}
 	defer redisClient.Close()
 
-	// --- Repositories ---
+	// Repositories
 	jwtRepo := jwt_repository_postgres.NewJwtRepository(pool)
 	usersRepo := users_repository_postgres.NewUsersRepository(pool)
 	roomsRepo := rooms_repository_postgres.NewRoomsRepository(pool)
@@ -92,7 +92,7 @@ func main() {
 	readsRepo := reads_repository_postgres.NewReadsRepository(pool)
 	dmRepo := dm_repository_postgres.NewDMRepository(pool)
 
-	// --- Services ---
+	// Services
 	jwtSvc := jwt_service.NewJwtService(jwtRepo, usersRepo, cfg)
 	usersSvc := users_service.NewUsersService(usersRepo, jwtSvc)
 	roomsSvc := rooms_service.NewRoomsService(roomsRepo)
@@ -100,13 +100,13 @@ func main() {
 	readSvc := reads_service.NewReadsService(readsRepo, roomsRepo)
 	dmSvc := dm_service.NewDMService(dmRepo, usersRepo)
 
-	// --- WebSocket Hub ---
+	// WebSocket Hub
 	hub := ws_hub.NewHub(redisClient, logger)
 	go hub.Run(ctx)
 
 	wsSvc := ws_service.NewWSService(wsRepo, hub)
 
-	// --- HTTP Handlers ---
+	// HTTP Handlers
 	jwtHandler := jwt_transport_http.NewJwtHTTPHandler(jwtSvc, cfg.JwtRefreshTTL)
 	usersHandler := users_transport_http.NewUsersHTTPHandler(usersSvc, cfg)
 	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc)
@@ -115,10 +115,10 @@ func main() {
 	readsHandler := reads_transport_http.NewReadsHandler(readSvc)
 	dmHandler := dm_transport_http.NewDMHandler(dmSvc)
 
-	// --- Auth middleware ---
+	// Auth middleware
 	authMiddleware := core_http_middleware.Auth(jwtSvc)
 
-	// --- Router ---
+	// Router
 	apiRouter := core_http_server.NewAPIVersionRouter(core_http_server.ApiVersion1)
 
 	// Публичные роуты
@@ -153,7 +153,7 @@ func main() {
 	// dm роуты (защищённые)
 	apiRouter.RegisterRoutes(dmHandler.Routes(authMiddleware)...)
 
-	// --- HTTP Server ---
+	// HTTP Server
 	logger.Debug("initializing http server")
 	httpServer := core_http_server.NewHTTPServer(
 		core_http_server.NewConfigMust(),
@@ -168,6 +168,9 @@ func main() {
 	if err := httpServer.Run(ctx); err != nil {
 		logger.Error("HTTP server run error", zap.Error(err))
 	}
+
+	//Фоновая горутина с очисткой старых токенов
+	go jwtRepo.StartCleanup(ctx, time.Hour, logger)
 
 	// Graceful shutdown WS
 	logger.Debug("shutting down websocket hub")

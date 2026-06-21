@@ -16,13 +16,11 @@ type GetMessagesResult struct {
 }
 
 func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string, before *time.Time, limit int) (GetMessagesResult, error) {
-	// Проверяем доступ к комнате
 	room, err := s.roomRepo.GetRoom(ctx, roomID)
 	if err != nil {
 		return GetMessagesResult{}, fmt.Errorf("get room: %w", err)
 	}
 
-	// Приватная комната и DM — только для членов
 	if room.IsPrivate || room.IsDM {
 		isMember, err := s.roomRepo.IsMember(ctx, roomID, userID)
 		if err != nil {
@@ -33,7 +31,7 @@ func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string
 		}
 	}
 
-	// Запрашиваем limit+1 чтобы понять есть ли ещё страницы
+	// Запрашиваем limit+1, чтобы понять, есть ли ещё страница
 	messages, err := s.repo.GetMessages(ctx, roomID, before, limit+1)
 	if err != nil {
 		return GetMessagesResult{}, fmt.Errorf("get messages: %w", err)
@@ -41,15 +39,12 @@ func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string
 
 	hasMore := len(messages) > limit
 	if hasMore {
-		// Убираем лишнее сообщение — оно было только для проверки hasMore
 		messages = messages[:limit]
 	}
 
 	var nextCursor *time.Time
 	if hasMore && len(messages) > 0 {
-		// Курсор — created_at самого старого сообщения на странице
-		t := messages[0].CreatedAt
-		nextCursor = &t
+		nextCursor = &messages[0].CreatedAt
 	}
 
 	return GetMessagesResult{

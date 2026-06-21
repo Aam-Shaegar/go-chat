@@ -9,7 +9,6 @@ import (
 	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 )
 
-// CreateRoom создаёт комнату и добавляет владельца атомарно в одной транзакции
 func (r *RoomsRepository) CreateRoom(ctx context.Context, room domain_models.Room) (domain_models.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()

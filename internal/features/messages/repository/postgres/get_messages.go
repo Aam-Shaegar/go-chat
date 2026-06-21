@@ -11,9 +11,9 @@ import (
 
 const defaultLimit = 50
 
-// GetMessages возвращает сообщения комнаты с cursor-based пагинацией.
-// before — курсор (created_at последнего полученного сообщения), nil = с самого начала (самые свежие).
-// Возвращает сообщения в порядке от старых к новым (для рендера в чате).
+// GetMessages возвращает сообщения комнаты с пагинацией по курсору.
+// before — курсор (created_at последнего сообщения), nil — самые свежие.
+// Возвращает сообщения от старых к новым.
 func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]domain_models.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
@@ -22,13 +22,10 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 		limit = defaultLimit
 	}
 
-	var (
-		rows core_postgres_pool.Rows
-		err  error
-	)
+	var rows core_postgres_pool.Rows
+	var err error
 
 	if before == nil {
-		// Первый запрос — самые свежие сообщения
 		query := `
 			SELECT id, room_id, user_id, reply_to_id, content, is_encrypted, created_at, updated_at, deleted_at
 			FROM gochat.messages
@@ -38,7 +35,6 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 		`
 		rows, err = r.pool.Query(ctx, query, roomID, limit)
 	} else {
-		// Следующая страница — старше курсора
 		query := `
 			SELECT id, room_id, user_id, reply_to_id, content, is_encrypted, created_at, updated_at, deleted_at
 			FROM gochat.messages
@@ -70,7 +66,7 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	// Разворачиваем — БД вернула DESC (новые первыми), клиент ждёт ASC (старые первыми)
+	// БД вернула DESC (новые первыми), разворачиваем для клиента — от старых к новым
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}

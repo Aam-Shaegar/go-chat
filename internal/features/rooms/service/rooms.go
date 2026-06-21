@@ -13,7 +13,6 @@ func (s *RoomsService) CreateRoom(ctx context.Context, name, description, ownerI
 	if name == "" {
 		return domain_models.Room{}, fmt.Errorf("name is required: %w", core_error.ErrInvalidArgument)
 	}
-	// CreateRoom в репозитории атомарно создаёт комнату и добавляет владельца
 	return s.repo.CreateRoom(ctx, domain_models.NewRoom(
 		"", name, description, isPrivate, false, ownerID, time.Now(),
 	))
