@@ -1,35 +1,36 @@
-
 services:
-  postgres:
+  gochat-postgres:
     image: postgres:16-alpine
     container_name: gochat-postgres
     environment:
-      POSTGRES_USER: gochat
-      POSTGRES_PASSWORD: gochat
-      POSTRGES_DB: gochat
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gochat"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  gochat-migrate:
+    image: migrate/migrate:v4.19.1
+    volumes:
+      - ./migrations:/migrations
+
+  port-forwarder:
+    image: alpine/socat:1.8.0.3
+    container_name: gochat-port-forwarder
+    command: tcp-listen:5432,fork,reuseaddr tcp-connect:gochat-postgres:5432
+    ports:
+      - "127.0.0.1:5432:5432"
+
   redis:
     image: redis:7-alpine
-    container_name: gochat_redis
+    container_name: gochat-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    restart: always
 
 volumes:
-  postgres_data:
+  pgdata:
   redis_data:
