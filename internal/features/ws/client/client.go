@@ -169,3 +169,9 @@ func (c *Client) WritePump() {
 		}
 	}
 }
+
+// Заглушка для тестов
+// SendChan возвращает канал для чтения исходящих событий (для тестов)
+func (c *Client) SendChan() <-chan ws_domain.OutgoingEvent {
+	return c.send
+}

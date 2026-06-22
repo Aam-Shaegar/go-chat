@@ -14,7 +14,7 @@ func (s *JwtService) Refresh(ctx context.Context, refreshToken string) (string, 
 		return "", "", fmt.Errorf("validate refresh token: %w", core_error.ErrUnauthorized)
 	}
 
-	stored, err := s.tokenRepository.GetRefreshToken(ctx, hashToken(refreshToken))
+	stored, err := s.tokenRepository.GetRefreshToken(ctx, HashToken(refreshToken))
 	if err != nil {
 		return "", "", fmt.Errorf("token not found or already revoked: %w", core_error.ErrUnauthorized)
 	}
@@ -35,8 +35,8 @@ func (s *JwtService) Refresh(ctx context.Context, refreshToken string) (string, 
 		return "", "", fmt.Errorf("generate refresh token: %w", err)
 	}
 
-	newHash := hashToken(newRefreshToken)
-	oldHash := hashToken(refreshToken)
+	newHash := HashToken(newRefreshToken)
+	oldHash := HashToken(refreshToken)
 	if err := s.tokenRepository.ReplaceRefreshToken(
 		ctx, oldHash, userID, newHash, time.Now().Add(s.cfg.JwtRefreshTTL),
 	); err != nil {

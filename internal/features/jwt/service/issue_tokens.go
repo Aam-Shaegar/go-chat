@@ -18,7 +18,7 @@ func (s *JwtService) IssueTokens(ctx context.Context, user domain_models.User) (
 	if err != nil {
 		return domain_dtos.AuthResponseDTO{}, "", fmt.Errorf("generate refresh token: %w", err)
 	}
-	err = s.tokenRepository.SaveRefreshToken(ctx, user.ID, hashToken(refreshToken), time.Now().Add(s.cfg.JwtRefreshTTL))
+	err = s.tokenRepository.SaveRefreshToken(ctx, user.ID, HashToken(refreshToken), time.Now().Add(s.cfg.JwtRefreshTTL))
 	if err != nil {
 		return domain_dtos.AuthResponseDTO{}, "", fmt.Errorf("save refresh token: %w", err)
 	}
