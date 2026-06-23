@@ -110,7 +110,7 @@ func main() {
 	jwtHandler := jwt_transport_http.NewJwtHTTPHandler(jwtSvc, cfg.JwtRefreshTTL)
 	usersHandler := users_transport_http.NewUsersHTTPHandler(usersSvc, cfg)
 	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc)
-	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo)
+	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo, jwtSvc)
 	messagesHandler := messages_transport_http.NewMessagesHandler(messagesSvc)
 	readsHandler := reads_transport_http.NewReadsHandler(readSvc)
 	dmHandler := dm_transport_http.NewDMHandler(dmSvc)
@@ -158,6 +158,7 @@ func main() {
 	httpServer := core_http_server.NewHTTPServer(
 		core_http_server.NewConfigMust(),
 		logger,
+		core_http_middleware.CORS("http://localhost:5173"),
 		core_http_middleware.RequestID(),
 		core_http_middleware.Logger(logger),
 		core_http_middleware.Trace(),

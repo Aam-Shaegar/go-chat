@@ -36,3 +36,9 @@ migrate-create:
 run:
 	@export POSTGRES_HOST=localhost && \
 		go run ./cmd/server/main.go
+
+frontend-dev:
+	@cd frontend && npm run dev
+
+frontend-build:
+	@cd frontend && npm run build

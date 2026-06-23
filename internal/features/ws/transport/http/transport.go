@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	core_error "go-chat/internal/core/errors"
 	core_logger "go-chat/internal/core/logger"
@@ -21,14 +22,15 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return true // TODO: в проде ограничить по origin
 	},
 }
 
 type WSHandler struct {
-	service  WSService
-	hub      Hub
-	roomRepo RoomRepository
+	service        WSService
+	hub            Hub
+	roomRepo       RoomRepository
+	tokenValidator TokenValidator
 }
 
 type WSService interface {
@@ -44,21 +46,26 @@ type RoomRepository interface {
 	IsMember(ctx context.Context, roomID, userID string) (bool, error)
 }
 
-func NewWSHandler(service WSService, hub Hub, roomRepo RoomRepository) *WSHandler {
+type TokenValidator interface {
+	ValidateAccessToken(ctx context.Context, token string) (string, string, error)
+}
+
+func NewWSHandler(service WSService, hub Hub, roomRepo RoomRepository, tokenValidator TokenValidator) *WSHandler {
 	return &WSHandler{
-		service:  service,
-		hub:      hub,
-		roomRepo: roomRepo,
+		service:        service,
+		hub:            hub,
+		roomRepo:       roomRepo,
+		tokenValidator: tokenValidator,
 	}
 }
 
 func (h *WSHandler) Routes(authMiddleware core_http_middleware.Middleware) []core_http_server.Route {
 	return []core_http_server.Route{
 		{
-			Method:     http.MethodGet,
-			Path:       "/ws/rooms/{roomId}",
-			Handler:    h.ServeWS,
-			Middleware: []core_http_middleware.Middleware{authMiddleware},
+			// Без authMiddleware — валидируем токен сами из query param
+			Method:  http.MethodGet,
+			Path:    "/ws/rooms/{roomId}",
+			Handler: h.ServeWS,
 		},
 	}
 }
@@ -68,13 +75,28 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	log := core_logger.FromContext(ctx)
 	responseHandler := core_http_response.NewHTTPResponseHandler(log, w)
 
-	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	// Токен из query param ?token=... (браузерный WS не поддерживает заголовки)
+	// Или из Authorization заголовка (для curl/wscat)
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		authHeader := r.Header.Get("Authorization")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token = after
+		}
+	}
+	if token == "" {
+		responseHandler.ErrorResponse(
+			fmt.Errorf("token required: %w", core_error.ErrUnauthorized),
+			"unauthorized",
+		)
+		return
+	}
+
+	userID, username, err := h.tokenValidator.ValidateAccessToken(ctx, token)
 	if err != nil {
 		responseHandler.ErrorResponse(err, "unauthorized")
 		return
 	}
-
-	username, _ := core_http_middleware.UsernameFromContext(ctx)
 	if username == "" {
 		username = userID
 	}
@@ -100,10 +122,6 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !isMember {
-		log.Debug("ws: user is not a member",
-			zap.String("user_id", userID),
-			zap.String("room_id", roomID),
-		)
 		responseHandler.ErrorResponse(
 			fmt.Errorf("not a member of this room: %w", core_error.ErrUnauthorized),
 			"forbidden",
