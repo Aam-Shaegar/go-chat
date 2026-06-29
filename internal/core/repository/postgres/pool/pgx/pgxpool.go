@@ -50,7 +50,7 @@ func (p *PgxConnectionPool) OpTimeout() time.Duration {
 func (p *PgxConnectionPool) Query(ctx context.Context, sql string, args ...any) (core_postgres_pool.Rows, error) {
 	rows, err := p.Pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, err
+		return nil, mapErrors(err)
 	}
 	return pgxRows{rows}, err
 }
@@ -61,7 +61,7 @@ func (p *PgxConnectionPool) QueryRow(ctx context.Context, sql string, args ...an
 func (p *PgxConnectionPool) Exec(ctx context.Context, sql string, arguments ...any) (core_postgres_pool.CommandTag, error) {
 	tag, err := p.Pool.Exec(ctx, sql, arguments...)
 	if err != nil {
-		return nil, err
+		return nil, mapErrors(err)
 
 	}
 	return pgxCommandTag{tag}, nil

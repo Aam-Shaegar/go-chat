@@ -28,24 +28,29 @@ func (m *MockRepository) SaveMessage(ctx context.Context, msg domain_models.Mess
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) EditMessage(ctx context.Context, messageID, userID, content string, updatedAt time.Time) (domain_models.Message, error) {
-	args := m.Called(ctx, messageID, userID, content, updatedAt)
+func (m *MockRepository) EditMessage(ctx context.Context, messageID, roomID, userID, content string, updatedAt time.Time) (domain_models.Message, error) {
+	args := m.Called(ctx, messageID, roomID, userID, content, updatedAt)
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) DeleteMessage(ctx context.Context, messageID, userID string, deletedAt time.Time) error {
-	args := m.Called(ctx, messageID, userID, deletedAt)
-	return args.Error(0)
+func (m *MockRepository) DeleteMessage(ctx context.Context, messageID, roomID, userID string, deletedAt time.Time) (domain_models.Message, error) {
+	args := m.Called(ctx, messageID, roomID, userID, deletedAt)
+	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) AddReaction(ctx context.Context, reaction domain_models.MessageReaction) error {
-	args := m.Called(ctx, reaction)
-	return args.Error(0)
+func (m *MockRepository) AddReaction(ctx context.Context, roomID string, reaction domain_models.MessageReaction) (domain_models.Message, error) {
+	args := m.Called(ctx, roomID, reaction)
+	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) RemoveReaction(ctx context.Context, messageID, userID, emoji string) error {
-	args := m.Called(ctx, messageID, userID, emoji)
-	return args.Error(0)
+func (m *MockRepository) RemoveReaction(ctx context.Context, messageID, roomID, userID, emoji string) (domain_models.Message, error) {
+	args := m.Called(ctx, messageID, roomID, userID, emoji)
+	return args.Get(0).(domain_models.Message), args.Error(1)
+}
+
+func (m *MockRepository) GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error) {
+	args := m.Called(ctx, roomID)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 type MockHub struct {
@@ -54,6 +59,11 @@ type MockHub struct {
 
 func (m *MockHub) Publish(ctx context.Context, roomID string, event ws_domain.OutgoingEvent) error {
 	args := m.Called(ctx, roomID, event)
+	return args.Error(0)
+}
+
+func (m *MockHub) PublishToUser(ctx context.Context, userID string, event ws_domain.OutgoingEvent) error {
+	args := m.Called(ctx, userID, event)
 	return args.Error(0)
 }
 
@@ -111,6 +121,7 @@ func TestHandle_SendMessage_Success(t *testing.T) {
 
 	savedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
 	repo.On("SaveMessage", mock.Anything, mock.Anything).Return(savedMsg, nil)
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeNewMessage &&
 			e.Payload.(ws_domain.NewMessagePayload).ID == "msg-1" &&
@@ -201,7 +212,8 @@ func TestHandle_EditMessage_Success(t *testing.T) {
 	}
 
 	updatedMsg := newTestMessage("msg-1", "room-1", "user-1", "edited", nil)
-	repo.On("EditMessage", mock.Anything, "msg-1", "user-1", "edited", mock.Anything).Return(updatedMsg, nil)
+	repo.On("EditMessage", mock.Anything, "msg-1", "room-1", "user-1", "edited", mock.Anything).Return(updatedMsg, nil)
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeMessageEdited &&
 			e.Payload.(ws_domain.MessageEditedPayload).MessageID == "msg-1" &&
@@ -244,7 +256,9 @@ func TestHandle_DeleteMessage_Success(t *testing.T) {
 		Payload: raw,
 	}
 
-	repo.On("DeleteMessage", mock.Anything, "msg-1", "user-1", mock.Anything).Return(nil)
+	deletedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
+	repo.On("DeleteMessage", mock.Anything, "msg-1", "room-1", "user-1", mock.Anything).Return(deletedMsg, nil)
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeMessageDeleted &&
 			e.Payload.(ws_domain.MessageDeletedPayload).MessageID == "msg-1" &&
@@ -289,7 +303,9 @@ func TestHandle_AddReaction_Success(t *testing.T) {
 		Payload: raw,
 	}
 
-	repo.On("AddReaction", mock.Anything, mock.Anything).Return(nil)
+	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("AddReaction", mock.Anything, "room-1", mock.Anything).Return(reactionMsg, nil)
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeReactionAdded &&
 			e.Payload.(ws_domain.ReactionPayload).MessageID == "msg-1" &&
@@ -318,7 +334,9 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 		Payload: raw,
 	}
 
-	repo.On("RemoveReaction", mock.Anything, "msg-1", "user-1", "👍").Return(nil)
+	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("RemoveReaction", mock.Anything, "msg-1", "room-1", "user-1", "👍").Return(reactionMsg, nil)
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeReactionRemoved &&
 			e.Payload.(ws_domain.ReactionPayload).MessageID == "msg-1" &&
@@ -334,7 +352,7 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 }
 
 func TestHandle_Typing_Success(t *testing.T) {
-	svc, _, hub := newService()
+	svc, repo, hub := newService()
 	client := newTestClient("user-1", "alice", "room-1")
 
 	payload := ws_domain.TypingPayload{RoomID: "room-1"}
@@ -344,6 +362,7 @@ func TestHandle_Typing_Success(t *testing.T) {
 		Payload: raw,
 	}
 
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeUserTyping &&
 			e.Payload.(ws_domain.UserTypingPayload).RoomID == "room-1" &&
@@ -375,10 +394,11 @@ func TestHandle_UnknownEventType(t *testing.T) {
 }
 
 func TestOnClose(t *testing.T) {
-	svc, _, hub := newService()
+	svc, repo, hub := newService()
 	client := newTestClient("user-1", "alice", "room-1")
 
 	hub.On("Unregister", client).Return()
+	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.Anything).Return(nil)
 
 	svc.OnClose(client)

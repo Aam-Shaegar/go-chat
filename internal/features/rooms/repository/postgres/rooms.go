@@ -22,7 +22,7 @@ func (r *RoomsRepository) CreateRoom(ctx context.Context, room domain_models.Roo
 	roomQuery := `
 		INSERT INTO gochat.rooms (name, description, is_private, is_dm, owner_id, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, name, description, is_private, is_dm, owner_id, created_at;
+		RETURNING id, name, description, is_private, is_dm, owner_id, created_at, created_at;
 	`
 	row := tx.QueryRow(ctx, roomQuery,
 		room.Name, room.Description, room.IsPrivate, room.IsDM, room.OwnerID, room.CreatedAt,
@@ -52,8 +52,12 @@ func (r *RoomsRepository) GetRoom(ctx context.Context, roomID string) (domain_mo
 	defer cancel()
 
 	query := `
-		SELECT id, name, description, is_private, is_dm, owner_id, created_at
-		FROM gochat.rooms WHERE id=$1;
+		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at,
+		       COALESCE(MAX(m.created_at), r.created_at) AS last_message_at
+		FROM gochat.rooms r
+		LEFT JOIN gochat.messages m ON m.room_id = r.id AND m.deleted_at IS NULL
+		WHERE r.id=$1
+		GROUP BY r.id;
 	`
 	row := r.pool.QueryRow(ctx, query, roomID)
 	room, err := scanRoom(row)
@@ -71,10 +75,13 @@ func (r *RoomsRepository) GetPublicRooms(ctx context.Context, limit, offset int)
 	defer cancel()
 
 	query := `
-		SELECT id, name, description, is_private, is_dm, owner_id, created_at
-		FROM gochat.rooms
-		WHERE is_private=false AND is_dm=false
-		ORDER BY created_at DESC
+		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at,
+		       COALESCE(MAX(m.created_at), r.created_at) AS last_message_at
+		FROM gochat.rooms r
+		LEFT JOIN gochat.messages m ON m.room_id = r.id AND m.deleted_at IS NULL
+		WHERE r.is_private=false AND r.is_dm=false
+		GROUP BY r.id
+		ORDER BY COALESCE(MAX(m.created_at), r.created_at) DESC
 		LIMIT $1 OFFSET $2;
 	`
 	return scanRooms(r.pool, ctx, query, limit, offset)
@@ -85,11 +92,14 @@ func (r *RoomsRepository) GetUserRooms(ctx context.Context, userID string) ([]do
 	defer cancel()
 
 	query := `
-		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at
+		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at,
+		       COALESCE(MAX(m.created_at), r.created_at) AS last_message_at
 		FROM gochat.rooms r
 		JOIN gochat.room_members rm ON rm.room_id=r.id
+		LEFT JOIN gochat.messages m ON m.room_id = r.id AND m.deleted_at IS NULL
 		WHERE rm.user_id=$1 AND r.is_dm=false
-		ORDER BY r.created_at DESC;
+		GROUP BY r.id
+		ORDER BY COALESCE(MAX(m.created_at), r.created_at) DESC;
 	`
 	return scanRooms(r.pool, ctx, query, userID)
 }
@@ -111,7 +121,7 @@ func (r *RoomsRepository) DeleteRoom(ctx context.Context, roomID, ownerID string
 
 func scanRoom(row core_postgres_pool.Row) (domain_models.Room, error) {
 	var m roomModel
-	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.IsPrivate, &m.IsDM, &m.OwnerID, &m.CreatedAt)
+	err := row.Scan(&m.ID, &m.Name, &m.Description, &m.IsPrivate, &m.IsDM, &m.OwnerID, &m.CreatedAt, &m.LastMessageAt)
 	if err != nil {
 		return domain_models.Room{}, fmt.Errorf("scan room: %w", err)
 	}
@@ -128,7 +138,7 @@ func scanRooms(pool core_postgres_pool.Pool, ctx context.Context, query string, 
 	var rooms []domain_models.Room
 	for rows.Next() {
 		var m roomModel
-		if err := rows.Scan(&m.ID, &m.Name, &m.Description, &m.IsPrivate, &m.IsDM, &m.OwnerID, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Description, &m.IsPrivate, &m.IsDM, &m.OwnerID, &m.CreatedAt, &m.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan room row: %w", err)
 		}
 		rooms = append(rooms, roomToDomain(m))

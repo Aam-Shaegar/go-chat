@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,33 +42,18 @@ func (s *RoomsService) CreateInvite(ctx context.Context, roomID, userID string, 
 }
 
 func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
-	invite, err := s.repo.GetInviteByToken(ctx, token)
+	if token == "" {
+		return domain_models.Room{}, fmt.Errorf("token is required: %w", core_error.ErrInvalidArgument)
+	}
+
+	room, err := s.repo.AcceptInvite(ctx, token, userID)
 	if err != nil {
-		return domain_models.Room{}, fmt.Errorf("invite not found: %w", core_error.ErrNotFound)
+		if errors.Is(err, core_error.ErrConflict) {
+			return domain_models.Room{}, err
+		}
+		return domain_models.Room{}, fmt.Errorf("invite expired, exhausted, inactive or already used: %w", core_error.ErrInvalidArgument)
 	}
-
-	if !invite.CanBeUsed() {
-		return domain_models.Room{}, fmt.Errorf("invite expired, exhausted or inactive: %w", core_error.ErrInvalidArgument)
-	}
-
-	// Проверяем членство до инкремента, чтобы не списать использование зря
-	alreadyMember, err := s.repo.IsMember(ctx, invite.RoomID, userID)
-	if err != nil {
-		return domain_models.Room{}, fmt.Errorf("check membership: %w", err)
-	}
-	if alreadyMember {
-		return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
-	}
-
-	if err := s.repo.TryIncrementInviteUses(ctx, token); err != nil {
-		return domain_models.Room{}, fmt.Errorf("invite exhausted or inactive: %w", core_error.ErrInvalidArgument)
-	}
-
-	if err := s.repo.AddMember(ctx, invite.RoomID, userID, domain_models.MemberRoleMember); err != nil {
-		return domain_models.Room{}, fmt.Errorf("add member: %w", err)
-	}
-
-	return s.repo.GetRoom(ctx, invite.RoomID)
+	return room, nil
 }
 
 func (s *RoomsService) GetRoomInvites(ctx context.Context, roomID, userID string) ([]domain_models.RoomInvite, error) {

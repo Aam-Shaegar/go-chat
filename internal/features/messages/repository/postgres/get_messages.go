@@ -3,7 +3,6 @@ package messages_repository_postgres
 import (
 	"context"
 	"fmt"
-	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
@@ -12,9 +11,9 @@ import (
 const defaultLimit = 50
 
 // GetMessages возвращает сообщения комнаты с пагинацией по курсору.
-// before — курсор (created_at последнего сообщения), nil — самые свежие.
+// before — курсор (created_at + id последнего сообщения), nil — самые свежие.
 // Возвращает сообщения от старых к новым.
-func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]domain_models.Message, error) {
+func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -27,22 +26,38 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 
 	if before == nil {
 		query := `
-			SELECT id, room_id, user_id, reply_to_id, content, is_encrypted, created_at, updated_at, deleted_at
-			FROM gochat.messages
-			WHERE room_id=$1 AND deleted_at IS NULL
-			ORDER BY created_at DESC
+			SELECT m.id, m.room_id, m.user_id, u.username, m.reply_to_id, m.content, m.is_encrypted,
+			       m.created_at, m.updated_at, m.deleted_at
+			FROM gochat.messages m
+			JOIN gochat.users u ON u.id = m.user_id
+			WHERE m.room_id=$1 AND m.deleted_at IS NULL
+			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $2;
 		`
 		rows, err = r.pool.Query(ctx, query, roomID, limit)
-	} else {
+	} else if before.ID == "" {
 		query := `
-			SELECT id, room_id, user_id, reply_to_id, content, is_encrypted, created_at, updated_at, deleted_at
-			FROM gochat.messages
-			WHERE room_id=$1 AND deleted_at IS NULL AND created_at < $2
-			ORDER BY created_at DESC
+			SELECT m.id, m.room_id, m.user_id, u.username, m.reply_to_id, m.content, m.is_encrypted,
+			       m.created_at, m.updated_at, m.deleted_at
+			FROM gochat.messages m
+			JOIN gochat.users u ON u.id = m.user_id
+			WHERE m.room_id=$1 AND m.deleted_at IS NULL AND m.created_at < $2
+			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $3;
 		`
-		rows, err = r.pool.Query(ctx, query, roomID, before, limit)
+		rows, err = r.pool.Query(ctx, query, roomID, before.CreatedAt, limit)
+	} else {
+		query := `
+			SELECT m.id, m.room_id, m.user_id, u.username, m.reply_to_id, m.content, m.is_encrypted,
+			       m.created_at, m.updated_at, m.deleted_at
+			FROM gochat.messages m
+			JOIN gochat.users u ON u.id = m.user_id
+			WHERE m.room_id=$1 AND m.deleted_at IS NULL
+			  AND (m.created_at < $2 OR (m.created_at = $2 AND m.id < $3::uuid))
+			ORDER BY m.created_at DESC, m.id DESC
+			LIMIT $4;
+		`
+		rows, err = r.pool.Query(ctx, query, roomID, before.CreatedAt, before.ID, limit)
 	}
 
 	if err != nil {
@@ -54,7 +69,7 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 	for rows.Next() {
 		var m domain_models.Message
 		if err := rows.Scan(
-			&m.ID, &m.RoomID, &m.UserID, &m.ReplyToID,
+			&m.ID, &m.RoomID, &m.UserID, &m.Username, &m.ReplyToID,
 			&m.Content, &m.IsEncrypted,
 			&m.CreatedAt, &m.UpdatedAt, &m.DeletedAt,
 		); err != nil {

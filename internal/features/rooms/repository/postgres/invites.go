@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	domain_models "go-chat/internal/core/domain/models"
+	core_error "go-chat/internal/core/errors"
 	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 )
 
@@ -67,6 +68,74 @@ func (r *RoomsRepository) TryIncrementInviteUses(ctx context.Context, token stri
 		return fmt.Errorf("invite exhausted, expired or inactive: %w", core_postgres_pool.ErrNoRows)
 	}
 	return nil
+}
+
+func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain_models.Room{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	inviteQuery := `
+		SELECT room_id
+		FROM gochat.room_invites
+		WHERE token=$1
+		  AND is_active=true
+		  AND (expires_at IS NULL OR expires_at > NOW())
+		  AND (max_uses = 0 OR uses < max_uses)
+		FOR UPDATE;
+	`
+	var roomID string
+	if err := tx.QueryRow(ctx, inviteQuery, token).Scan(&roomID); err != nil {
+		return domain_models.Room{}, fmt.Errorf("invite not usable: %w", err)
+	}
+
+	memberQuery := `SELECT EXISTS(SELECT 1 FROM gochat.room_members WHERE room_id=$1 AND user_id=$2);`
+	var alreadyMember bool
+	if err := tx.QueryRow(ctx, memberQuery, roomID, userID).Scan(&alreadyMember); err != nil {
+		return domain_models.Room{}, fmt.Errorf("check membership: %w", err)
+	}
+	if alreadyMember {
+		return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
+	}
+
+	updateQuery := `UPDATE gochat.room_invites SET uses = uses + 1 WHERE token=$1;`
+	if _, err := tx.Exec(ctx, updateQuery, token); err != nil {
+		return domain_models.Room{}, fmt.Errorf("increment invite uses: %w", err)
+	}
+
+	insertQuery := `
+		INSERT INTO gochat.room_members (room_id, user_id, role)
+		VALUES ($1, $2, 'member');
+	`
+	if _, err := tx.Exec(ctx, insertQuery, roomID, userID); err != nil {
+		if errors.Is(err, core_postgres_pool.ErrUniqueViolation) {
+			return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
+		}
+		return domain_models.Room{}, fmt.Errorf("insert member: %w", err)
+	}
+
+	roomQuery := `
+		SELECT r.id, r.name, r.description, r.is_private, r.is_dm, r.owner_id, r.created_at,
+		       COALESCE(MAX(m.created_at), r.created_at) AS last_message_at
+		FROM gochat.rooms r
+		LEFT JOIN gochat.messages m ON m.room_id = r.id AND m.deleted_at IS NULL
+		WHERE r.id=$1
+		GROUP BY r.id;
+	`
+	room, err := scanRoom(tx.QueryRow(ctx, roomQuery, roomID))
+	if err != nil {
+		return domain_models.Room{}, fmt.Errorf("accept invite: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain_models.Room{}, fmt.Errorf("commit tx: %w", err)
+	}
+	return room, nil
 }
 
 // DeactivateInvite отключает инвайт. Может выполнить создатель инвайта или владелец комнаты.

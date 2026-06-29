@@ -20,10 +20,10 @@ migrate-action:
 		echo "Error: action is required. Usage: make migrate-action action=<action>"; \
 		exit 1; \
 	fi; \
-	docker compose run --rm gochat-migrate \
-		-path /migrations \
-		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@gochat-postgres:5432/$(POSTGRES_DB)?sslmode=disable" \
-		"$(action)"
+		docker compose run --rm gochat-migrate \
+			-path /migrations \
+			-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@gochat-postgres:5432/$(POSTGRES_NAME)?sslmode=disable" \
+			"$(action)"
 
 migrate-create:
 	@if [ -z "$(seq)" ]; then \
@@ -36,3 +36,9 @@ migrate-create:
 run:
 	@export POSTGRES_HOST=localhost && \
 		go run ./cmd/server/main.go
+
+frontend-dev:
+	@cd frontend && npm run dev
+
+frontend-build:
+	@cd frontend && npm run build

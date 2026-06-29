@@ -25,14 +25,16 @@ func NewWSService(repo Repository, hub Hub) *WSService {
 
 type Repository interface {
 	SaveMessage(ctx context.Context, msg domain_models.Message) (domain_models.Message, error)
-	EditMessage(ctx context.Context, messageID, userID, content string, updatedAt time.Time) (domain_models.Message, error)
-	DeleteMessage(ctx context.Context, messageID, userID string, deletedAt time.Time) error
-	AddReaction(ctx context.Context, reaction domain_models.MessageReaction) error
-	RemoveReaction(ctx context.Context, messageID, userID, emoji string) error
+	EditMessage(ctx context.Context, messageID, roomID, userID, content string, updatedAt time.Time) (domain_models.Message, error)
+	DeleteMessage(ctx context.Context, messageID, roomID, userID string, deletedAt time.Time) (domain_models.Message, error)
+	AddReaction(ctx context.Context, roomID string, reaction domain_models.MessageReaction) (domain_models.Message, error)
+	RemoveReaction(ctx context.Context, messageID, roomID, userID, emoji string) (domain_models.Message, error)
+	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
 }
 
 type Hub interface {
 	Publish(ctx context.Context, roomID string, event ws_domain.OutgoingEvent) error
+	PublishToUser(ctx context.Context, userID string, event ws_domain.OutgoingEvent) error
 	Unregister(client *ws_client.Client)
 }
 
@@ -54,7 +56,7 @@ func (s *WSService) Handle(client *ws_client.Client, event ws_domain.IncomingEve
 	case ws_domain.EventTypeRemoveReaction:
 		err = s.handleRemoveReaction(ctx, client, event.Payload)
 	case ws_domain.EventTypeTyping:
-		err = s.handleTyping(ctx, client)
+		err = s.handleTyping(ctx, client, event.Payload)
 	default:
 		client.SendEvent(ws_domain.OutgoingEvent{
 			Type:    ws_domain.EventTypeError,
@@ -79,10 +81,14 @@ func (s *WSService) handleSendMessage(ctx context.Context, client *ws_client.Cli
 	if p.Content == "" {
 		return fmt.Errorf("content is required: %w", core_error.ErrInvalidArgument)
 	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
 
 	now := time.Now()
 	msg, err := s.repo.SaveMessage(ctx, domain_models.NewMessage(
-		"", client.RoomID, client.ID,
+		"", roomID, client.ID,
 		p.ReplyToID, p.Content, false,
 		now, now,
 	))
@@ -90,18 +96,19 @@ func (s *WSService) handleSendMessage(ctx context.Context, client *ws_client.Cli
 		return fmt.Errorf("save message: %w", err)
 	}
 
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	event := ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeNewMessage,
 		Payload: ws_domain.NewMessagePayload{
 			ID:        msg.ID,
 			RoomID:    msg.RoomID,
 			UserID:    msg.UserID,
-			Username:  client.Username,
+			Username:  displayUsername(msg.Username, client.Username),
 			ReplyToID: msg.ReplyToID,
 			Content:   msg.Content,
 			CreatedAt: msg.CreatedAt,
 		},
-	})
+	}
+	return s.publishRoomEvent(ctx, msg.RoomID, event, nil)
 }
 
 func (s *WSService) handleEditMessage(ctx context.Context, client *ws_client.Client, raw []byte) error {
@@ -112,13 +119,17 @@ func (s *WSService) handleEditMessage(ctx context.Context, client *ws_client.Cli
 	if p.MessageID == "" || p.Content == "" {
 		return fmt.Errorf("message_id and content are required: %w", core_error.ErrInvalidArgument)
 	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
 
-	msg, err := s.repo.EditMessage(ctx, p.MessageID, client.ID, p.Content, time.Now())
+	msg, err := s.repo.EditMessage(ctx, p.MessageID, roomID, client.ID, p.Content, time.Now())
 	if err != nil {
 		return fmt.Errorf("edit message: %w", err)
 	}
 
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeMessageEdited,
 		Payload: ws_domain.MessageEditedPayload{
 			MessageID: msg.ID,
@@ -126,7 +137,7 @@ func (s *WSService) handleEditMessage(ctx context.Context, client *ws_client.Cli
 			Content:   msg.Content,
 			UpdatedAt: msg.UpdatedAt,
 		},
-	})
+	}, nil)
 }
 
 func (s *WSService) handleDeleteMessage(ctx context.Context, client *ws_client.Client, raw []byte) error {
@@ -137,20 +148,25 @@ func (s *WSService) handleDeleteMessage(ctx context.Context, client *ws_client.C
 	if p.MessageID == "" {
 		return fmt.Errorf("message_id is required: %w", core_error.ErrInvalidArgument)
 	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
 
 	now := time.Now()
-	if err := s.repo.DeleteMessage(ctx, p.MessageID, client.ID, now); err != nil {
+	msg, err := s.repo.DeleteMessage(ctx, p.MessageID, roomID, client.ID, now)
+	if err != nil {
 		return fmt.Errorf("delete message: %w", err)
 	}
 
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeMessageDeleted,
 		Payload: ws_domain.MessageDeletedPayload{
 			MessageID: p.MessageID,
-			RoomID:    client.RoomID,
+			RoomID:    msg.RoomID,
 			DeletedAt: now,
 		},
-	})
+	}, nil)
 }
 
 func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Client, raw []byte) error {
@@ -161,25 +177,30 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 	if p.MessageID == "" || p.Emoji == "" {
 		return fmt.Errorf("message_id and emoji are required: %w", core_error.ErrInvalidArgument)
 	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
 
-	if err := s.repo.AddReaction(ctx, domain_models.MessageReaction{
+	msg, err := s.repo.AddReaction(ctx, roomID, domain_models.MessageReaction{
 		MessageID: p.MessageID,
 		UserID:    client.ID,
 		Emoji:     p.Emoji,
 		CreatedAt: time.Now(),
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("add reaction: %w", err)
 	}
 
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionAdded,
 		Payload: ws_domain.ReactionPayload{
 			MessageID: p.MessageID,
-			RoomID:    client.RoomID,
+			RoomID:    msg.RoomID,
 			UserID:    client.ID,
 			Emoji:     p.Emoji,
 		},
-	})
+	}, nil)
 }
 
 func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.Client, raw []byte) error {
@@ -190,44 +211,103 @@ func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.
 	if p.MessageID == "" || p.Emoji == "" {
 		return fmt.Errorf("message_id and emoji are required: %w", core_error.ErrInvalidArgument)
 	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
 
-	if err := s.repo.RemoveReaction(ctx, p.MessageID, client.ID, p.Emoji); err != nil {
+	msg, err := s.repo.RemoveReaction(ctx, p.MessageID, roomID, client.ID, p.Emoji)
+	if err != nil {
 		return fmt.Errorf("remove reaction: %w", err)
 	}
 
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionRemoved,
 		Payload: ws_domain.ReactionPayload{
 			MessageID: p.MessageID,
-			RoomID:    client.RoomID,
+			RoomID:    msg.RoomID,
 			UserID:    client.ID,
 			Emoji:     p.Emoji,
 		},
-	})
+	}, nil)
 }
 
-func (s *WSService) handleTyping(ctx context.Context, client *ws_client.Client) error {
-	return s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+func (s *WSService) handleTyping(ctx context.Context, client *ws_client.Client, raw []byte) error {
+	var p ws_domain.TypingPayload
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return fmt.Errorf("invalid payload: %w", core_error.ErrInvalidArgument)
+		}
+	}
+	roomID, err := resolveRoomID(client, p.RoomID)
+	if err != nil {
+		return err
+	}
+
+	return s.publishRoomEvent(ctx, roomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserTyping,
 		Payload: ws_domain.UserTypingPayload{
-			RoomID:   client.RoomID,
+			RoomID:   roomID,
 			UserID:   client.ID,
 			Username: client.Username,
 		},
-	})
+	}, map[string]struct{}{client.ID: {}})
 }
 
 // OnClose вызывается когда клиент отключается
 func (s *WSService) OnClose(client *ws_client.Client) {
 	s.hub.Unregister(client)
+	if client.RoomID == "" {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = s.hub.Publish(ctx, client.RoomID, ws_domain.OutgoingEvent{
+	_ = s.publishRoomEvent(ctx, client.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserLeft,
 		Payload: ws_domain.UserJoinedPayload{
 			RoomID:   client.RoomID,
 			UserID:   client.ID,
 			Username: client.Username,
 		},
-	})
+	}, map[string]struct{}{client.ID: {}})
+}
+
+func resolveRoomID(client *ws_client.Client, payloadRoomID string) (string, error) {
+	if client.RoomID != "" {
+		if payloadRoomID != "" && payloadRoomID != client.RoomID {
+			return "", fmt.Errorf("room_id does not match connection room: %w", core_error.ErrInvalidArgument)
+		}
+		return client.RoomID, nil
+	}
+	if payloadRoomID == "" {
+		return "", fmt.Errorf("room_id is required: %w", core_error.ErrInvalidArgument)
+	}
+	return payloadRoomID, nil
+}
+
+func displayUsername(fromMessage, fallback string) string {
+	if fromMessage != "" {
+		return fromMessage
+	}
+	return fallback
+}
+
+func (s *WSService) publishRoomEvent(ctx context.Context, roomID string, event ws_domain.OutgoingEvent, exclude map[string]struct{}) error {
+	if err := s.hub.Publish(ctx, roomID, event); err != nil {
+		return err
+	}
+
+	userIDs, err := s.repo.GetRoomMemberIDs(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room members: %w", err)
+	}
+	for _, userID := range userIDs {
+		if _, skip := exclude[userID]; skip {
+			continue
+		}
+		if err := s.hub.PublishToUser(ctx, userID, event); err != nil {
+			return fmt.Errorf("publish to user: %w", err)
+		}
+	}
+	return nil
 }
