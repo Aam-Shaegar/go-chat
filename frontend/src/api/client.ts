@@ -1,13 +1,13 @@
 import axios from 'axios'
+import { useAuthStore } from '../store/authStore'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5050/api/v1'
 
 export const client = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true, // нужно для refresh_token cookie
+  withCredentials: true,
 })
 
-// Автоматически добавляем access token в каждый запрос
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
@@ -16,7 +16,6 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// При 401 — пробуем обновить токен, потом повторяем запрос
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -31,11 +30,11 @@ client.interceptors.response.use(
           { withCredentials: true }
         )
         localStorage.setItem('access_token', data.access_token)
+        useAuthStore.getState().setAccessToken(data.access_token)
         original.headers.Authorization = `Bearer ${data.access_token}`
         return client(original)
       } catch {
-        localStorage.removeItem('access_token')
-        window.location.href = '/login'
+        useAuthStore.getState().clearAuth()
       }
     }
 

@@ -43,25 +43,30 @@ type OutgoingEvent struct {
 // Payloads клиент -> сервер
 
 type SendMessagePayload struct {
+	RoomID    string  `json:"room_id,omitempty"`
 	Content   string  `json:"content"`
 	ReplyToID *string `json:"reply_to_id,omitempty"`
 }
 
 type EditMessagePayload struct {
+	RoomID    string `json:"room_id,omitempty"`
 	MessageID string `json:"message_id"`
 	Content   string `json:"content"`
 }
 
 type DeleteMessagePayload struct {
+	RoomID    string `json:"room_id,omitempty"`
 	MessageID string `json:"message_id"`
 }
 
 type AddReactionPayload struct {
+	RoomID    string `json:"room_id,omitempty"`
 	MessageID string `json:"message_id"`
 	Emoji     string `json:"emoji"`
 }
 
 type RemoveReactionPayload struct {
+	RoomID    string `json:"room_id,omitempty"`
 	MessageID string `json:"message_id"`
 	Emoji     string `json:"emoji"`
 }

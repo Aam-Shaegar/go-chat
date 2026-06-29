@@ -83,9 +83,12 @@ func (r *RoomsRepository) AddMember(ctx context.Context, roomID, userID string, 
 		VALUES ($1, $2, $3)
 		ON CONFLICT DO NOTHING;
 	`
-	_, err := r.pool.Exec(ctx, query, roomID, userID, string(role))
+	tag, err := r.pool.Exec(ctx, query, roomID, userID, string(role))
 	if err != nil {
 		return fmt.Errorf("add member: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("member already exists: %w", core_postgres_pool.ErrUniqueViolation)
 	}
 	return nil
 }

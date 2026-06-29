@@ -3,7 +3,6 @@ package messages_service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
@@ -11,11 +10,11 @@ import (
 
 type GetMessagesResult struct {
 	Messages   []domain_models.Message `json:"messages"`
-	NextCursor *time.Time              `json:"next_cursor,omitempty"`
-	HasMore    bool                    `json:"has_more"`
+	NextCursor *domain_models.MessageCursor
+	HasMore    bool `json:"has_more"`
 }
 
-func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string, before *time.Time, limit int) (GetMessagesResult, error) {
+func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) (GetMessagesResult, error) {
 	room, err := s.roomRepo.GetRoom(ctx, roomID)
 	if err != nil {
 		return GetMessagesResult{}, fmt.Errorf("get room: %w", err)
@@ -39,12 +38,17 @@ func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string
 
 	hasMore := len(messages) > limit
 	if hasMore {
-		messages = messages[:limit]
+		// Repository returns messages oldest -> newest. The extra limit+1 row is
+		// the oldest one, so drop it and keep the newest visible page intact.
+		messages = messages[1:]
 	}
 
-	var nextCursor *time.Time
+	var nextCursor *domain_models.MessageCursor
 	if hasMore && len(messages) > 0 {
-		nextCursor = &messages[0].CreatedAt
+		nextCursor = &domain_models.MessageCursor{
+			CreatedAt: messages[0].CreatedAt,
+			ID:        messages[0].ID,
+		}
 	}
 
 	return GetMessagesResult{

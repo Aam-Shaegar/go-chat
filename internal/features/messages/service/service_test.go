@@ -20,7 +20,7 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) GetMessages(ctx context.Context, roomID string, before *time.Time, limit int) ([]domain_models.Message, error) {
+func (m *MockRepository) GetMessages(ctx context.Context, roomID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
 	args := m.Called(ctx, roomID, before, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -221,10 +221,11 @@ func TestGetMessages_HasMore_True(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, result.HasMore)
 	assert.Len(t, result.Messages, limit)
+	assert.Equal(t, messages[1:], result.Messages)
 	assert.NotNil(t, result.NextCursor)
-	// Курсор = created_at самого старого из оставшихся (первый в массиве после обрезки)
-	expectedCursor := messages[0].CreatedAt
-	assert.Equal(t, &expectedCursor, result.NextCursor)
+	// Курсор = created_at + id самого старого из оставшихся (первый в массиве после обрезки)
+	assert.Equal(t, messages[1].CreatedAt, result.NextCursor.CreatedAt)
+	assert.Equal(t, messages[1].ID, result.NextCursor.ID)
 }
 
 func TestGetMessages_HasMore_False(t *testing.T) {
@@ -255,9 +256,12 @@ func TestGetMessages_WithBefore(t *testing.T) {
 	roomID := "room-123"
 	userID := "user-456"
 	limit := 5
-	before := time.Now().Add(-24 * time.Hour)
+	before := domain_models.MessageCursor{
+		CreatedAt: time.Now().Add(-24 * time.Hour),
+		ID:        "cursor-message",
+	}
 	expectedMessages := []domain_models.Message{
-		newMessage("1", before.Add(-2*time.Hour)),
+		newMessage("1", before.CreatedAt.Add(-2*time.Hour)),
 	}
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)

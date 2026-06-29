@@ -7,6 +7,7 @@ import (
 
 	ws_domain "go-chat/internal/features/ws/domain"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -21,14 +22,15 @@ const (
 // Client — одно активное WebSocket соединение.
 // Потокобезопасен: SendEvent/Close можно вызывать из любой горутины.
 type Client struct {
-	ID       string
-	Username string
-	RoomID   string
-	conn     *websocket.Conn
-	send     chan ws_domain.OutgoingEvent
-	once     sync.Once      // гарантирует закрытие канала ровно один раз
-	wg       sync.WaitGroup // ждём завершения обеих pump горутин
-	log      Logger
+	ConnectionID string
+	ID           string
+	Username     string
+	RoomID       string
+	conn         *websocket.Conn
+	send         chan ws_domain.OutgoingEvent
+	once         sync.Once      // гарантирует закрытие канала ровно один раз
+	wg           sync.WaitGroup // ждём завершения обеих pump горутин
+	log          Logger
 }
 
 type Logger interface {
@@ -38,12 +40,13 @@ type Logger interface {
 
 func NewClient(userID, username, roomID string, conn *websocket.Conn, log Logger) *Client {
 	return &Client{
-		ID:       userID,
-		Username: username,
-		RoomID:   roomID,
-		conn:     conn,
-		send:     make(chan ws_domain.OutgoingEvent, 256),
-		log:      log,
+		ConnectionID: uuid.NewString(),
+		ID:           userID,
+		Username:     username,
+		RoomID:       roomID,
+		conn:         conn,
+		send:         make(chan ws_domain.OutgoingEvent, 256),
+		log:          log,
 	}
 }
 
@@ -77,13 +80,26 @@ func (c *Client) SendEvent(event ws_domain.OutgoingEvent) {
 	}
 }
 
-// ReadPump читает сообщения от клиента.
-// Завершение -> закрывает канал -> WritePump завершается.
-func (c *Client) ReadPump(
+// Serve регистрирует клиента и обслуживает обе websocket pump-горутины.
+// wg.Add выполняется до регистрации, чтобы Shutdown не мог проскочить между
+// добавлением клиента в hub и стартом горутин.
+func (c *Client) Serve(
+	register func(),
 	handle func(client *Client, event ws_domain.IncomingEvent),
 	onClose func(client *Client),
 ) {
-	c.wg.Add(1)
+	c.wg.Add(2)
+	register()
+	go c.writePump()
+	c.readPump(handle, onClose)
+}
+
+// readPump читает сообщения от клиента.
+// Завершение -> закрывает канал -> writePump завершается.
+func (c *Client) readPump(
+	handle func(client *Client, event ws_domain.IncomingEvent),
+	onClose func(client *Client),
+) {
 	defer func() {
 		if r := recover(); r != nil {
 			c.log.Error("ws: panic in ReadPump",
@@ -130,9 +146,8 @@ func (c *Client) ReadPump(
 	}
 }
 
-// WritePump пишет сообщения клиенту.
-func (c *Client) WritePump() {
-	c.wg.Add(1)
+// writePump пишет сообщения клиенту.
+func (c *Client) writePump() {
 	ticker := time.NewTicker(pingInterval)
 	defer func() {
 		if r := recover(); r != nil {

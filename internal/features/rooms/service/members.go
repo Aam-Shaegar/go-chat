@@ -2,10 +2,12 @@ package rooms_service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
+	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 )
 
 func (s *RoomsService) JoinPublicRoom(ctx context.Context, roomID, userID string) error {
@@ -26,7 +28,13 @@ func (s *RoomsService) JoinPublicRoom(ctx context.Context, roomID, userID string
 	if isMember {
 		return fmt.Errorf("already a member: %w", core_error.ErrConflict)
 	}
-	return s.repo.AddMember(ctx, roomID, userID, domain_models.MemberRoleMember)
+	if err := s.repo.AddMember(ctx, roomID, userID, domain_models.MemberRoleMember); err != nil {
+		if errors.Is(err, core_postgres_pool.ErrUniqueViolation) {
+			return fmt.Errorf("already a member: %w", core_error.ErrConflict)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *RoomsService) LeaveRoom(ctx context.Context, roomID, userID string) error {

@@ -7,7 +7,6 @@ import (
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
-	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 	rooms_service "go-chat/internal/features/rooms/service"
 
 	"github.com/stretchr/testify/assert"
@@ -88,6 +87,11 @@ func (m *MockRepository) GetInviteByToken(ctx context.Context, token string) (do
 func (m *MockRepository) TryIncrementInviteUses(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
 	return args.Error(0)
+}
+
+func (m *MockRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
+	args := m.Called(ctx, token, userID)
+	return args.Get(0).(domain_models.Room), args.Error(1)
 }
 
 func (m *MockRepository) DeactivateInvite(ctx context.Context, token, userID string) error {
@@ -320,14 +324,8 @@ func TestAcceptInvite_Success(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 	room := newRoom(false)
-	future := time.Now().Add(24 * time.Hour)
-	invite := newInvite(0, 1, true, &future)
 
-	repo.On("GetInviteByToken", ctx, "token123").Return(invite, nil)
-	repo.On("IsMember", ctx, roomID, memberID).Return(false, nil)
-	repo.On("TryIncrementInviteUses", ctx, "token123").Return(nil)
-	repo.On("AddMember", ctx, roomID, memberID, domain_models.MemberRoleMember).Return(nil)
-	repo.On("GetRoom", ctx, roomID).Return(room, nil)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(room, nil)
 
 	result, err := svc.AcceptInvite(ctx, "token123", memberID)
 
@@ -338,46 +336,29 @@ func TestAcceptInvite_Success(t *testing.T) {
 func TestAcceptInvite_AlreadyMember(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
-	future := time.Now().Add(24 * time.Hour)
-	invite := newInvite(0, 1, true, &future)
 
-	repo.On("GetInviteByToken", ctx, "token123").Return(invite, nil)
-	repo.On("IsMember", ctx, roomID, memberID).Return(true, nil)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, core_error.ErrConflict)
 
 	_, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.ErrorIs(t, err, core_error.ErrConflict)
-	repo.AssertNotCalled(t, "TryIncrementInviteUses")
 }
 
 func TestAcceptInvite_Expired(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
-	past := time.Now().Add(-24 * time.Hour)
-	invite := newInvite(0, 1, true, &past)
 
-	repo.On("GetInviteByToken", ctx, "token123").Return(invite, nil)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, assert.AnError)
 
 	_, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.ErrorIs(t, err, core_error.ErrInvalidArgument)
-	repo.AssertNotCalled(t, "IsMember")
 }
 
 func TestAcceptInvite_Inactive(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
-	future := time.Now().Add(24 * time.Hour)
-	invite := domain_models.NewRoomInvite("id", roomID, "token123", ownerID, 1, &future, time.Now())
-	// Деактивируем через рефлексию не можем — создаём через другой способ
-	// Используем exhausted invite (uses >= max_uses)
-	exhaustedInvite := domain_models.NewRoomInvite("id", roomID, "token123", ownerID, 1, &future, time.Now())
-	_ = invite
-
-	repo.On("GetInviteByToken", ctx, "token123").Return(exhaustedInvite, nil)
-	repo.On("IsMember", ctx, roomID, memberID).Return(false, nil)
-	// TryIncrementInviteUses вернёт ошибку — инвайт исчерпан на уровне БД
-	repo.On("TryIncrementInviteUses", ctx, "token123").Return(core_postgres_pool.ErrNoRows)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, assert.AnError)
 
 	_, err := svc.AcceptInvite(ctx, "token123", memberID)
 

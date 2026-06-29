@@ -9,18 +9,20 @@ import (
 )
 
 type JwtHTTPHandler struct {
-	jwtService JwtService
-	refreshTTL time.Duration
+	jwtService          JwtService
+	refreshTTL          time.Duration
+	secureRefreshCookie bool
 }
 
 type JwtService interface {
 	Refresh(ctx context.Context, refreshToken string) (string, string, error)
 }
 
-func NewJwtHTTPHandler(jwtService JwtService, refreshTTL time.Duration) *JwtHTTPHandler {
+func NewJwtHTTPHandler(jwtService JwtService, refreshTTL time.Duration, secureRefreshCookie bool) *JwtHTTPHandler {
 	return &JwtHTTPHandler{
-		jwtService: jwtService,
-		refreshTTL: refreshTTL,
+		jwtService:          jwtService,
+		refreshTTL:          refreshTTL,
+		secureRefreshCookie: secureRefreshCookie,
 	}
 }
 

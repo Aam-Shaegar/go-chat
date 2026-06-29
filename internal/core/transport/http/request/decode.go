@@ -10,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-var requestValidarod = validator.New()
+var requestValidator = validator.New()
 
 type validatable interface {
 	Validate() error
@@ -27,7 +27,7 @@ func DecodeAndValidateRequest(r *http.Request, dest any) error {
 			return fmt.Errorf("request validation: %v: %w", err, core_error.ErrInvalidArgument)
 		}
 	} else {
-		if err := requestValidarod.Struct(dest); err != nil {
+		if err := requestValidator.Struct(dest); err != nil {
 			return fmt.Errorf("request validation: %v: %w", err, core_error.ErrInvalidArgument)
 		}
 	}

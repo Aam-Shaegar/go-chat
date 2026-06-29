@@ -3,13 +3,14 @@ package domain_models
 import "time"
 
 type Room struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	IsPrivate   bool      `json:"is_private"`
-	IsDM        bool      `json:"is_dm"`
-	OwnerID     string    `json:"owner_id"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	IsPrivate     bool       `json:"is_private"`
+	IsDM          bool       `json:"is_dm"`
+	OwnerID       string     `json:"owner_id"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 }
 
 func NewRoom(id, name, description string, isPrivate, isDM bool, ownerID string, createdAt time.Time) Room {

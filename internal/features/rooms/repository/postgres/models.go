@@ -6,13 +6,14 @@ import (
 )
 
 type roomModel struct {
-	ID          string
-	Name        string
-	Description string
-	IsPrivate   bool
-	IsDM        bool
-	OwnerID     string
-	CreatedAt   time.Time
+	ID            string
+	Name          string
+	Description   string
+	IsPrivate     bool
+	IsDM          bool
+	OwnerID       string
+	CreatedAt     time.Time
+	LastMessageAt time.Time
 }
 
 type memberModel struct {
@@ -36,10 +37,12 @@ type inviteModel struct {
 }
 
 func roomToDomain(m roomModel) domain_models.Room {
-	return domain_models.NewRoom(
+	room := domain_models.NewRoom(
 		m.ID, m.Name, m.Description,
 		m.IsPrivate, m.IsDM, m.OwnerID, m.CreatedAt,
 	)
+	room.LastMessageAt = &m.LastMessageAt
+	return room
 }
 
 func memberToDomain(m memberModel) domain_models.RoomMember {

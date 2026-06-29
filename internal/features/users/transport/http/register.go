@@ -1,12 +1,13 @@
 package users_transport_http
 
 import (
+	"net/http"
+	"time"
+
 	domain_dtos "go-chat/internal/core/domain/dtos"
 	core_logger "go-chat/internal/core/logger"
 	core_http_request "go-chat/internal/core/transport/http/request"
 	core_http_response "go-chat/internal/core/transport/http/response"
-	"net/http"
-	"time"
 )
 
 type RegisterRequest domain_dtos.RegisterInputDTO
@@ -32,7 +33,7 @@ func (h *UsersHTTPHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.SecureRefreshCookie,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 		Expires:  time.Now().Add(h.cfg.JwtRefreshTTL),

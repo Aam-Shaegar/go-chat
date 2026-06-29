@@ -3,6 +3,7 @@ package users_service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	domain_dtos "go-chat/internal/core/domain/dtos"
@@ -13,6 +14,9 @@ import (
 )
 
 func (s *UsersService) Register(ctx context.Context, username, email, password string) (domain_dtos.AuthResponseDTO, string, error) {
+	username = strings.TrimSpace(username)
+	email = strings.ToLower(strings.TrimSpace(email))
+
 	if username == "" || email == "" || password == "" {
 		return domain_dtos.AuthResponseDTO{}, "", fmt.Errorf(
 			"username, email, password are required: %w",

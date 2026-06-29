@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
 	core_logger "go-chat/internal/core/logger"
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
@@ -21,7 +23,7 @@ type MessagesHandler struct {
 }
 
 type MessagesService interface {
-	GetMessages(ctx context.Context, roomID, userID string, before *time.Time, limit int) (messages_service.GetMessagesResult, error)
+	GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) (messages_service.GetMessagesResult, error)
 }
 
 func NewMessagesHandler(service MessagesService) *MessagesHandler {
@@ -59,9 +61,9 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var before *time.Time
+	var before *domain_models.MessageCursor
 	if raw := r.URL.Query().Get("before"); raw != "" {
-		ms, err := strconv.ParseInt(raw, 10, 64)
+		cursor, err := parseMessageCursor(raw)
 		if err != nil {
 			resp.ErrorResponse(
 				fmt.Errorf("invalid before cursor: %w", core_error.ErrInvalidArgument),
@@ -69,8 +71,7 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		t := time.UnixMilli(ms).UTC()
-		before = &t
+		before = cursor
 	}
 
 	limit := 50
@@ -94,14 +95,13 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 	type response struct {
 		Messages   interface{} `json:"messages"`
-		NextCursor *int64      `json:"next_cursor,omitempty"`
+		NextCursor *string     `json:"next_cursor,omitempty"`
 		HasMore    bool        `json:"has_more"`
 	}
 
-	var nextCursor *int64
+	var nextCursor *string
 	if result.NextCursor != nil {
-		ms := result.NextCursor.UnixMilli()
-		nextCursor = &ms
+		nextCursor = encodeMessageCursor(result.NextCursor)
 	}
 
 	resp.JSONResponse(response{
@@ -109,4 +109,35 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		NextCursor: nextCursor,
 		HasMore:    result.HasMore,
 	}, http.StatusOK)
+}
+
+func parseMessageCursor(raw string) (*domain_models.MessageCursor, error) {
+	if createdRaw, id, ok := strings.Cut(raw, "|"); ok {
+		createdAt, err := time.Parse(time.RFC3339Nano, createdRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse composite cursor: %w", err)
+		}
+		if id == "" {
+			return nil, fmt.Errorf("parse composite cursor: empty message id")
+		}
+		return &domain_models.MessageCursor{CreatedAt: createdAt.UTC(), ID: id}, nil
+	}
+
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return &domain_models.MessageCursor{CreatedAt: time.UnixMilli(ms).UTC()}, nil
+	}
+
+	createdAt, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &domain_models.MessageCursor{CreatedAt: createdAt.UTC()}, nil
+}
+
+func encodeMessageCursor(cursor *domain_models.MessageCursor) *string {
+	if cursor == nil {
+		return nil
+	}
+	encoded := cursor.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + cursor.ID
+	return &encoded
 }

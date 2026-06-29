@@ -8,14 +8,14 @@ import (
 )
 
 type Config struct {
-	Addr            string        `envconfig:"HTTP_ADDR" required:"true"`
-	ShutdownTimeout time.Duration `envconfig:"HTTP_SHUTDOWN_TIMEOUT" default:"30s"`
+	Addr            string        `envconfig:"ADDR" required:"true"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
 }
 
 func NewConfig() (Config, error) {
 	var config Config
-	if err := envconfig.Process("HTTP_ADDR", &config); err != nil {
-		return Config{}, fmt.Errorf("process envonfig: %w", err)
+	if err := envconfig.Process("HTTP", &config); err != nil {
+		return Config{}, fmt.Errorf("process envconfig: %w", err)
 	}
 	return config, nil
 }

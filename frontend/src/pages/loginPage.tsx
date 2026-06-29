@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { authApi } from '../api/auth'
 
@@ -11,86 +12,76 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const { setAuth } = useAuthStore()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
     setError('')
     setLoading(true)
 
     try {
       const { data } = isRegister
-        ? await authApi.register(username, email, password)
-        : await authApi.login(email, password)
+        ? await authApi.register(username.trim(), email.trim(), password)
+        : await authApi.login(email.trim(), password)
 
       setAuth(data.user, data.access_token)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })
         ?.response?.data?.message
-      setError(msg || 'Something went wrong')
+      setError(msg || 'Authentication failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">GoChat</h1>
-          <p className="text-gray-400 mt-2">
-            {isRegister ? 'Create your account' : 'Welcome back'}
+    <main className="grid min-h-screen place-items-center bg-[#eef3f8] px-4 py-8 text-slate-950">
+      <section className="w-full max-w-sm">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#229ed9] text-white shadow-lg shadow-sky-200">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8" aria-hidden="true">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-normal text-slate-950">GoChat</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {isRegister ? 'Create account' : 'Sign in to continue'}
           </p>
         </div>
 
-        <div className="bg-gray-900 rounded-2xl p-8 shadow-xl">
+        <div className="rounded-2xl bg-white p-5 shadow-xl shadow-slate-200/70">
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                  placeholder="your_username"
-                  required
-                  minLength={3}
-                />
-              </div>
+              <Field
+                label="Username"
+                type="text"
+                value={username}
+                onChange={setUsername}
+                placeholder="username"
+                minLength={3}
+                required
+              />
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
+            <Field
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@example.com"
+              required
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                placeholder="••••••••"
-                required
-                minLength={8}
-              />
-            </div>
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              placeholder="password"
+              minLength={8}
+              required
+            />
 
             {error && (
-              <p className="text-red-400 text-sm bg-red-900/20 rounded-lg px-4 py-2">
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
                 {error}
               </p>
             )}
@@ -98,23 +89,52 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-3 transition"
+              className="h-11 w-full rounded-full bg-[#229ed9] text-sm font-semibold text-white transition hover:bg-[#168ac0] disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {loading ? 'Loading...' : isRegister ? 'Create account' : 'Sign in'}
             </button>
           </form>
 
-          <p className="text-center text-gray-400 mt-6 text-sm">
-            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <div className="mt-5 text-center text-sm text-slate-500">
+            <span>{isRegister ? 'Already have an account?' : 'Need an account?'}</span>
             <button
-              onClick={() => { setIsRegister(!isRegister); setError('') }}
-              className="text-indigo-400 hover:text-indigo-300 font-medium transition"
+              type="button"
+              onClick={() => {
+                setIsRegister(!isRegister)
+                setError('')
+              }}
+              className="ml-1 font-semibold text-[#229ed9] transition hover:text-[#168ac0]"
             >
               {isRegister ? 'Sign in' : 'Create one'}
             </button>
-          </p>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
+  )
+}
+
+function Field({ label, type, value, onChange, placeholder, required = false, minLength }: {
+  label: string
+  type: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  required?: boolean
+  minLength?: number
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        required={required}
+        minLength={minLength}
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9]"
+      />
+    </label>
   )
 }

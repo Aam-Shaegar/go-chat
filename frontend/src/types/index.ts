@@ -19,6 +19,7 @@ export interface Room {
   is_dm: boolean
   owner_id: string
   created_at: string
+  last_message_at?: string
 }
 
 export interface RoomMember {
@@ -44,8 +45,20 @@ export interface Message {
 
 export interface MessagesResponse {
   messages: Message[]
-  next_cursor?: number
+  next_cursor?: string
   has_more: boolean
+}
+
+export interface RoomInvite {
+  id: string
+  room_id: string
+  token: string
+  created_by: string
+  max_uses: number
+  uses: number
+  is_active: boolean
+  expires_at?: string
+  created_at: string
 }
 
 export type WSEventType =
