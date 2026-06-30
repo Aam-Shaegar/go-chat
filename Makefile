@@ -42,3 +42,19 @@ frontend-dev:
 
 frontend-build:
 	@cd frontend && npm run build
+
+backend-build:
+	@mkdir -p bin
+	@echo "Building backend binary..."
+	@go build -o bin/gochat ./cmd/server
+
+backend-run:
+	@export POSTGRES_HOST=localhost && \
+		./bin/gochat
+
+frontend-serve:
+	@# Serve production-built frontend from frontend/dist using "serve" (install with `npm i -g serve`).
+	@cd frontend && npx serve -s dist
+
+build-all: frontend-build backend-build
+	@echo "Built frontend (frontend/dist) and backend (bin/gochat)"
