@@ -313,7 +313,7 @@ function MessageBubble({ message, isMine, showUsername }: {
           {showUsername && !isMine && (
             <p className="mb-0.5 text-xs font-semibold text-[#229ed9]">{message.username}</p>
           )}
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.content}</p>
           <div className="mt-1 flex justify-end gap-1 text-[11px] leading-none text-slate-400">
             {edited && <span>edited</span>}
             <span>{formatTime(message.created_at)}</span>
