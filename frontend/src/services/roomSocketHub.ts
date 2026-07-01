@@ -1,7 +1,7 @@
 import { WebSocketManager, type ConnectionState } from './websocketManager'
 import type { WSEvent } from '../types'
 
-const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:5050/api/v1'
+const WS_BASE = import.meta.env.VITE_WS_URL ?? '/api/v1'
 const DISCONNECT_GRACE_MS = 800
 
 interface RoomSocketCallbacks {
