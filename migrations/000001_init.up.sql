@@ -25,7 +25,13 @@ CREATE TABLE IF NOT EXISTS gochat.refresh_tokens (
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON gochat.refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires  ON gochat.refresh_tokens(expires_at);
 
-CREATE TYPE gochat.member_role AS ENUM ('owner', 'admin', 'member');
+DO $$
+BEGIN
+    CREATE TYPE gochat.member_role AS ENUM ('owner', 'admin', 'member');
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS gochat.rooms (
     id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
