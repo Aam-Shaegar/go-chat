@@ -1,98 +1,333 @@
 # GoChat
 
-Реал-тайм чат-приложение с поддержкой комнат, прямых сообщений и приглашений.
+Современный real-time мессенджер, разработанный на Go с использованием чистой слоистой архитектуры. Проект поддерживает комнаты, личные сообщения, JWT-аутентификацию и обмен сообщениями через WebSocket.
 
 ---
 
-## Возможности
+# Возможности
 
-- **Публичные и приватные комнаты** — создание, управление членами, приглашение через токены
-- **Прямые сообщения** — переписка между пользователями
-- **Реал-тайм сообщения** — через WebSocket
-- **Отслеживание прочитанных сообщений** — система меток "прочитано"
-- **Аутентификация** — регистрация, вход, JWT + refresh-токены
-- **Управление сессиями** — автоматическая чистка старых токенов
+- Регистрация и авторизация пользователей
+- JWT Access + Refresh Tokens
+- Создание публичных и приватных комнат
+- Управление участниками комнаты
+- Приглашение пользователей по инвайт-ссылкам
+- Прямые сообщения (Direct Messages)
+- Обмен сообщениями в режиме реального времени через WebSocket
+- Отслеживание непрочитанных сообщений
+- Автоматическая очистка просроченных refresh-токенов
+- Поддержка нескольких WebSocket-инстансов через Redis Pub/Sub
+- Docker-based deployment
 
 ---
 
-## Стек
+# Технологии
 
-**Backend:**
-- Go 1.20+ (echo, pgx, redis)
+## Backend
+
+- Go 1.25
+- net/http
+- PostgreSQL
+- pgx
+- Redis
+- JWT
+- Gorilla WebSocket
+- Docker
+- Docker Compose
+
+## Frontend
+
+- React 19
+- TypeScript
+- Vite
+- Zustand
+- React Query
+- Axios
+
+## Infrastructure
+
+- Nginx
+- Docker Compose
 - PostgreSQL 16
 - Redis 7
-- Миграции (migrate/migrate)
-
-**Frontend:**
-- React 18 + TypeScript
-- Vite
-- TailwindCSS, Zustand (state management)
-- WebSocket для live-обновлений
 
 ---
 
-## Архитектура
+# Архитектура
 
-**Backend:** чистая слоистая архитектура (transport → service → repository). Каждый feature (users, rooms, messages, ws) — независимый пакет с собственным слоем хранилища.
+Backend построен по принципам слоистой архитектуры.
 
-**Frontend:** компоненты + хуки для WebSocket и состояния (chatStore, authStore).
+```
 
-**Почему:**
-- Слои разделены для тестируемости и масштабируемости.
-- Redis нужен для WebSocket hub (pub/sub между инстансами).
-- JWT для stateless auth.
+HTTP
+↓
+Transport
+↓
+Service
+↓
+Repository
+↓
+PostgreSQL
+
+```
+
+Каждая функциональность выделена в отдельный feature:
+
+```
+
+internal/
+features/
+users/
+rooms/
+messages/
+dm/
+reads/
+jwt/
+ws/
+
+```
+
+Каждый feature содержит собственные слои:
+
+```
+
+transport/
+service/
+repository/
+
+```
+
+Такой подход позволяет независимо развивать функциональность проекта и упрощает тестирование.
 
 ---
 
-## Как запустить
+# Структура проекта
 
-### Требования
-- Go 1.20+
-- Node.js 18+ (npm)
-- Docker & Docker Compose
+```
 
-### Шаги
+.
+├── cmd/
+│   └── server/
+├── internal/
+├── frontend/
+├── migrations/
+├── docker/
+│   └── nginx/
+├── build/
+├── Dockerfile.backend
+├── Dockerfile.backend.runtime
+├── docker-compose.yml
+└── README.md
 
-**1. Подготовка**
+```
+
+---
+
+# Запуск проекта (Production)
+
+## 1. Клонировать репозиторий
+
 ```bash
-# Скопируйте и заполните .env (уже есть в репо)
-# Убедитесь, что Docker Compose запущен
+git clone https://github.com/<your-repository>.git
+
+cd go-chat
 ```
 
-**2. Инфраструктура (PostgreSQL + Redis)**
+## 2. Создать .env
+
 ```bash
-make infra
+cp .env.example .env
 ```
 
-**3. Миграции БД**
+Заполнить необходимые переменные окружения.
+
+---
+
+## 3. Запустить приложение
+
 ```bash
-make migrate-up
+docker compose up -d
 ```
 
-**4. Сборка фронтенда (production)**
+Docker автоматически:
+
+- поднимет PostgreSQL;
+- поднимет Redis;
+- выполнит миграции;
+- запустит backend;
+- запустит Nginx.
+
+---
+
+## Проверка
+
 ```bash
-make frontend-build
-# Результат в frontend/dist
+docker compose ps
 ```
 
-**5. Запуск**
+Просмотр логов:
 
-Опция A — разработка (go run + npm dev):
 ```bash
-make run              # бэкенд на :8080
-make frontend-dev     # фронтенд на :5173
+docker compose logs backend
+
+docker compose logs nginx
+
+docker compose logs postgres
 ```
 
-Опция B — production-подобная сборка:
+---
+
+# Обновление приложения
+
+После внесения изменений:
+
 ```bash
-make build-all        # собрать оба
-make backend-run      # бэкенд (bin/gochat)
-make frontend-serve   # статический сервер для dist
+git pull
+
+docker compose build
+
+docker compose up -d
 ```
 
-**6. Откройте приложение**
-```
-http://localhost:5173  (dev)
-http://localhost:3000  (serve)
+---
+
+# Переменные окружения
+
+Минимально необходимые:
+
+```text
+POSTGRES_HOST
+POSTGRES_PORT
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_NAME
+POSTGRES_TIMEOUT
+
+HTTP_ADDR
+HTTP_SHUTDOWN_TIMEOUT
+
+REDIS_ADDR
+
+JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET
+JWT_ACCESS_TTL
+JWT_REFRESH_TTL
+
+TIME_ZONE
+
+CORS_ALLOWED_ORIGINS
+SECURE_REFRESH_COOKIE
+
+LOGGER_LEVEL
+LOGGER_FOLDER
 ```
 
+---
+
+# API
+
+Все HTTP-эндпоинты доступны по адресу
+
+```
+/api/v1
+```
+
+Основные группы:
+
+- Authentication
+- Users
+- Rooms
+- Messages
+- Direct Messages
+- Invites
+- Reads
+- WebSocket
+
+---
+
+# WebSocket
+
+Подключение:
+
+```
+/api/v1/ws
+```
+
+Передача сообщений осуществляется через WebSocket Hub.
+
+Для масштабирования между несколькими экземплярами приложения используется Redis Pub/Sub.
+
+---
+
+# Используемая инфраструктура
+
+```
+
+Internet
+│
+▼
+Nginx
+│
+├───────────────┐
+▼               ▼
+Backend      Static React
+│
+├───────────────┐
+▼               ▼
+PostgreSQL    Redis
+
+```
+
+---
+
+# Основные возможности
+
+## Комнаты
+
+- создание комнат;
+- публичные и приватные комнаты;
+- управление участниками;
+- роли участников;
+- приглашения по токенам.
+
+## Сообщения
+
+- отправка сообщений;
+- история сообщений;
+- непрочитанные сообщения;
+- отметка о прочтении.
+
+## Личные сообщения
+
+- создание диалогов;
+- история переписки;
+- WebSocket-обновления.
+
+## Аутентификация
+
+- регистрация;
+- вход;
+- refresh токены;
+- автоматическое обновление access token.
+
+---
+
+# Roadmap
+
+Планируемые улучшения:
+
+- загрузка файлов;
+- редактирование сообщений;
+- удаление сообщений;
+- реакции на сообщения;
+- поиск по сообщениям;
+- Docker Hub CI/CD;
+- GitHub Actions;
+- интеграционные тесты;
+- OpenAPI/Swagger;
+- мониторинг (Prometheus + Grafana).
+
+---
+
+# Лицензия
+
+Проект создан в образовательных целях и используется как pet-проект для изучения разработки высоконагруженных backend-приложений на Go.
