@@ -21,7 +21,10 @@ client.interceptors.response.use(
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    // Не пытаемся обновить токен для эндпоинтов аутентификации
+    const isAuthEndpoint = original.url?.includes('/auth/') || original.url?.includes('/jwt/')
+    
+    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true
       try {
         const { data } = await axios.post(
@@ -33,8 +36,9 @@ client.interceptors.response.use(
         useAuthStore.getState().setAccessToken(data.access_token)
         original.headers.Authorization = `Bearer ${data.access_token}`
         return client(original)
-      } catch {
+      } catch (refreshError) {
         useAuthStore.getState().clearAuth()
+        return Promise.reject(refreshError)
       }
     }
 
