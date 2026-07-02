@@ -62,7 +62,7 @@ services:
 
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.backend.runtime
 
     restart: unless-stopped
 
