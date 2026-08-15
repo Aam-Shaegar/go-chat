@@ -22,7 +22,11 @@ client.interceptors.response.use(
     const original = error.config
 
     // Не пытаемся обновить токен для эндпоинтов аутентификации
-    const isAuthEndpoint = original.url?.includes('/auth/') || original.url?.includes('/jwt/')
+    // Строим полный URL для надежной проверки (baseURL + url)
+    const baseURL = original.baseURL || ''
+    const url = original.url || ''
+    const fullUrl = baseURL.replace(/\/+$/, '') + '/' + url.replace(/^\/+/, '')
+    const isAuthEndpoint = fullUrl.includes('/auth/') || fullUrl.includes('/jwt/')
     
     if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true
