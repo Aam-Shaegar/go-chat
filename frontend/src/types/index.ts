@@ -41,6 +41,7 @@ export interface Message {
   created_at: string
   updated_at: string
   deleted_at?: string
+  reactions?: MessageReaction[]
 }
 
 export interface MessagesResponse {
@@ -115,4 +116,18 @@ export interface UserTypingPayload {
 
 export interface ErrorPayload {
   message: string
+}
+
+export interface ReactionPayload {
+  message_id: string
+  room_id: string
+  user_id: string
+  emoji: string
+}
+
+export interface MessageReaction {
+  emoji: string
+  count: number
+  users: string[]
+  isReactedByMe: boolean
 }

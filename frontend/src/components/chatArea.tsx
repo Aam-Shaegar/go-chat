@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -7,7 +7,7 @@ import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
 import { roomsApi } from '../api/rooms'
-import type { Message, RoomInvite } from '../types'
+import type { Message, RoomInvite, MessageReaction } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
@@ -293,6 +293,45 @@ function MessageBubble({ message, isMine, showUsername }: {
   showUsername: boolean
 }) {
   const edited = message.updated_at !== message.created_at
+  const isDeleted = message.deleted_at != null
+  const { user } = useAuthStore()
+  const { addReaction, removeReaction } = useWebSocket(message.room_id)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  const reactions = message.reactions ?? []
+  const hasReactions = reactions.length > 0
+
+  const handleAddReaction = (emoji: string) => {
+    if (isDeleted) return
+    if (addReaction(emoji)) {
+      setShowReactionPicker(false)
+    }
+  }
+
+  const handleRemoveReaction = (emoji: string) => {
+    if (isDeleted) return
+    removeReaction(emoji)
+    setShowReactionPicker(false)
+  }
+
+  const toggleReaction = (emoji: string, isReactedByMe: boolean) => {
+    if (isReactedByMe) {
+      handleRemoveReaction(emoji)
+    } else {
+      handleAddReaction(emoji)
+    }
+  }
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowReactionPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   return (
     <div data-message-id={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -304,7 +343,7 @@ function MessageBubble({ message, isMine, showUsername }: {
         )}
 
         <div
-          className={`rounded-2xl px-3.5 py-2 text-sm leading-5 shadow-sm ${
+          className={`relative rounded-2xl px-3.5 py-2 text-sm leading-5 shadow-sm ${
             isMine
               ? 'rounded-br-md bg-[#dff6d5] text-slate-950'
               : 'rounded-bl-md bg-white text-slate-950'
@@ -314,15 +353,164 @@ function MessageBubble({ message, isMine, showUsername }: {
             <p className="mb-0.5 text-xs font-semibold text-[#229ed9]">{message.username}</p>
           )}
           <p className="whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.content}</p>
+          
+          {!isDeleted && hasReactions && (
+            <ReactionsRow
+              reactions={reactions}
+              currentUserId={user?.id}
+              onToggle={toggleReaction}
+              onPickerToggle={setShowReactionPicker}
+              isOpen={showReactionPicker}
+            />
+          )}
+
           <div className="mt-1 flex justify-end gap-1 text-[11px] leading-none text-slate-400">
             {edited && <span>edited</span>}
             <span>{formatTime(message.created_at)}</span>
           </div>
         </div>
       </div>
+
+{!isDeleted && showReactionPicker && (
+        <ReactionPicker
+          ref={pickerRef}
+          onSelect={handleAddReaction}
+          onClose={() => setShowReactionPicker(false)}
+        />
+)}
     </div>
   )
 }
+
+function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOpen }: {
+  reactions: MessageReaction[]
+  currentUserId: string | undefined
+  onToggle: (emoji: string, isReactedByMe: boolean) => void
+  onPickerToggle: (open: boolean) => void
+  isOpen: boolean
+}) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1">
+      {reactions.map((reaction) => {
+        const isReactedByMe = reaction.isReactedByMe || reaction.users.includes(currentUserId ?? '')
+        return (
+          <button
+            key={reaction.emoji}
+            type="button"
+            onClick={() => onToggle(reaction.emoji, isReactedByMe)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              onPickerToggle(true)
+            }}
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition ${
+              isReactedByMe
+                ? 'bg-[#229ed9]/15 text-[#229ed9]'
+                : 'text-slate-500 hover:bg-slate-100'
+            }`}
+            aria-label={`${reaction.emoji} ${reaction.count}`}
+          >
+            <span>{reaction.emoji}</span>
+            {reaction.count > 1 && <span className="font-medium">{reaction.count}</span>}
+          </button>
+        )
+      })}
+      <button
+        type="button"
+        onClick={() => onPickerToggle(!isOpen)}
+        onContextMenu={(e) => e.preventDefault()}
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition"
+        aria-label="Add reaction"
+      >
+        <Icon name="smile" className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
+const ReactionPicker = forwardRef<HTMLDivElement, { onSelect: (emoji: string) => void; onClose: () => void }>(
+  ({ onSelect, onClose }, ref) => {
+    const emojis = useMemo(() => ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🤡', '💩', '🎉', '👏', '🤔', '🙏', '💯'], [])
+    const containerRef = useRef<HTMLDivElement>(null)
+    const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
+    const [focusedIndex, setFocusedIndex] = useState(0)
+
+    useImperativeHandle(ref, () => containerRef.current, [])
+
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        switch (e.key) {
+          case 'ArrowRight':
+            e.preventDefault()
+            setFocusedIndex((i) => (i + 1) % emojis.length)
+            break
+          case 'ArrowLeft':
+            e.preventDefault()
+            setFocusedIndex((i) => (i - 1 + emojis.length) % emojis.length)
+            break
+          case 'Enter':
+          case ' ':
+            e.preventDefault()
+            onSelect(emojis[focusedIndex])
+            onClose()
+            break
+          case 'Escape':
+            e.preventDefault()
+            onClose()
+            break
+          case 'Tab':
+            // Allow default tab behavior but keep focus in picker
+            if (focusedIndex === emojis.length - 1 && !e.shiftKey) {
+              e.preventDefault()
+              buttonRefs.current[0]?.focus()
+              setFocusedIndex(0)
+            } else if (focusedIndex === 0 && e.shiftKey) {
+              e.preventDefault()
+              buttonRefs.current[emojis.length - 1]?.focus()
+              setFocusedIndex(emojis.length - 1)
+            }
+            break
+        }
+      }
+
+      container.addEventListener('keydown', handleKeyDown)
+      return () => container.removeEventListener('keydown', handleKeyDown)
+    }, [emojis, focusedIndex, onSelect, onClose])
+
+  useEffect(() => {
+    buttonRefs.current[focusedIndex]?.focus()
+  }, [focusedIndex])
+
+  return (
+    <div
+      ref={containerRef}
+      className="absolute bottom-full left-0 mb-1 flex gap-1 rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200"
+      style={{ zIndex: 50 }}
+      role="dialog"
+      aria-label="Choose reaction"
+    >
+      {emojis.map((emoji, index) => (
+        <button
+          key={emoji}
+          ref={(el) => { buttonRefs.current[index] = el }}
+          type="button"
+          onClick={() => { onSelect(emoji); onClose() }}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xl transition ${
+            index === focusedIndex ? 'bg-slate-100 ring-2 ring-[#229ed9]' : 'hover:bg-slate-100'
+          }`}
+          aria-label={emoji}
+          aria-selected={index === focusedIndex}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  )
+})
+
+ReactionPicker.displayName = 'ReactionPicker'
 
 function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void }) {
   const [invite, setInvite] = useState<RoomInvite | null>(null)
@@ -424,7 +612,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -434,6 +622,7 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     lock: <path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6V11z" />,
     close: <path d="M18 6L6 18M6 6l12 12" />,
     down: <path d="M12 5v14M19 12l-7 7-7-7" />,
+    smile: <path d="M22 11c0 6.1-4.9 11-11 11S0 17.1 0 11s4.9-11 11-11 11 4.9 11 11zM8 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM16 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM21 11a10 10 0 0 0-6.3-9.3.9.9 0 0 0-1.4 0A10 10 0 0 0 3 11c0 2.5 1.2 4.7 3 6M11 17a4 4 0 0 1 0-8" />,
   }
 
   return (

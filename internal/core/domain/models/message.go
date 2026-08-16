@@ -3,16 +3,17 @@ package domain_models
 import "time"
 
 type Message struct {
-	ID          string     `json:"id"`
-	RoomID      string     `json:"room_id"`
-	UserID      string     `json:"user_id"`
-	Username    string     `json:"username,omitempty"`
-	ReplyToID   *string    `json:"reply_to_id,omitempty"`
-	Content     string     `json:"content"`
-	IsEncrypted bool       `json:"is_encrypted"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	ID          string            `json:"id"`
+	RoomID      string            `json:"room_id"`
+	UserID      string            `json:"user_id"`
+	Username    string            `json:"username,omitempty"`
+	ReplyToID   *string           `json:"reply_to_id,omitempty"`
+	Content     string            `json:"content"`
+	IsEncrypted bool              `json:"is_encrypted"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+	DeletedAt   *time.Time        `json:"deleted_at,omitempty"`
+	Reactions   []MessageReaction `json:"reactions,omitempty"`
 }
 
 type MessageCursor struct {
@@ -45,6 +46,13 @@ func (m *Message) Delete(deletedAt time.Time) {
 func (m Message) IsDeleted() bool { return m.DeletedAt != nil }
 
 type MessageReaction struct {
+	Emoji       string   `json:"emoji"`
+	Count       int      `json:"count"`
+	Users       []string `json:"users"`
+	IsReactedByMe bool   `json:"is_reacted_by_me"`
+}
+
+type RawMessageReaction struct {
 	MessageID string    `json:"message_id"`
 	UserID    string    `json:"user_id"`
 	Emoji     string    `json:"emoji"`

@@ -2,6 +2,7 @@ package ws_repository_postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -99,7 +100,7 @@ func (r *WSRepository) DeleteMessage(ctx context.Context, messageID, roomID, use
 	return msg, nil
 }
 
-func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction domain_models.MessageReaction) (domain_models.Message, error) {
+func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction domain_models.RawMessageReaction) (domain_models.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -123,15 +124,34 @@ func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction 
 			SELECT id, $3, $4, $5 FROM authorized
 			ON CONFLICT DO NOTHING
 			RETURNING message_id
+		),
+		reactions_agg AS (
+			SELECT 
+				json_agg(
+					json_build_object(
+						'emoji', mr.emoji,
+						'count', mr.cnt,
+						'users', mr.user_ids,
+						'is_reacted_by_me', mr.user_ids @> ARRAY[$3::uuid]
+					)
+				) as reactions_json
+			FROM (
+				SELECT emoji, COUNT(*) as cnt, ARRAY_AGG(user_id) as user_ids
+				FROM gochat.message_reactions
+				WHERE message_id = $1
+				GROUP BY emoji
+			) mr
 		)
 		SELECT a.id, a.room_id, a.user_id, u.username, a.reply_to_id, a.content, a.is_encrypted,
-		       a.created_at, a.updated_at, a.deleted_at
+		       a.created_at, a.updated_at, a.deleted_at,
+		       COALESCE(ra.reactions_json, '[]'::json)
 		FROM authorized a
 		JOIN gochat.users u ON u.id = a.user_id
-		LEFT JOIN inserted i ON i.message_id = a.id;
+		LEFT JOIN inserted i ON i.message_id = a.id
+		CROSS JOIN reactions_agg ra;
 	`
 	row := r.pool.QueryRow(ctx, query, reaction.MessageID, roomID, reaction.UserID, reaction.Emoji, reaction.CreatedAt)
-	msg, err := scanMessage(row)
+	msg, err := scanMessageWithReactions(row)
 	if err != nil {
 		if errors.Is(err, core_postgres_pool.ErrNoRows) {
 			return domain_models.Message{}, fmt.Errorf("message not found or access denied: %w", core_postgres_pool.ErrNoRows)
@@ -160,15 +180,34 @@ func (r *WSRepository) RemoveReaction(ctx context.Context, messageID, roomID, us
 			DELETE FROM gochat.message_reactions
 			WHERE message_id=$1 AND user_id=$3 AND emoji=$4
 			RETURNING message_id
+		),
+		reactions_agg AS (
+			SELECT 
+				json_agg(
+					json_build_object(
+						'emoji', mr.emoji,
+						'count', mr.cnt,
+						'users', mr.user_ids,
+						'is_reacted_by_me', mr.user_ids @> ARRAY[$3::uuid]
+					)
+				) as reactions_json
+			FROM (
+				SELECT emoji, COUNT(*) as cnt, ARRAY_AGG(user_id) as user_ids
+				FROM gochat.message_reactions
+				WHERE message_id = $1
+				GROUP BY emoji
+			) mr
 		)
 		SELECT a.id, a.room_id, a.user_id, u.username, a.reply_to_id, a.content, a.is_encrypted,
-		       a.created_at, a.updated_at, a.deleted_at
+		       a.created_at, a.updated_at, a.deleted_at,
+		       COALESCE(ra.reactions_json, '[]'::json)
 		FROM authorized a
 		JOIN gochat.users u ON u.id = a.user_id
-		LEFT JOIN deleted d ON d.message_id = a.id;
+		LEFT JOIN deleted d ON d.message_id = a.id
+		CROSS JOIN reactions_agg ra;
 	`
 	row := r.pool.QueryRow(ctx, query, messageID, roomID, userID, emoji)
-	msg, err := scanMessage(row)
+	msg, err := scanMessageWithReactions(row)
 	if err != nil {
 		if errors.Is(err, core_postgres_pool.ErrNoRows) {
 			return domain_models.Message{}, fmt.Errorf("message not found or access denied: %w", core_postgres_pool.ErrNoRows)
@@ -212,6 +251,40 @@ func scanMessage(row core_postgres_pool.Row) (domain_models.Message, error) {
 	)
 	if err != nil {
 		return domain_models.Message{}, fmt.Errorf("scan message: %w", err)
+	}
+	return m, nil
+}
+
+func scanMessageWithReactions(row core_postgres_pool.Row) (domain_models.Message, error) {
+	var m domain_models.Message
+	var reactionsJSON string
+	err := row.Scan(
+		&m.ID, &m.RoomID, &m.UserID, &m.Username, &m.ReplyToID,
+		&m.Content, &m.IsEncrypted,
+		&m.CreatedAt, &m.UpdatedAt, &m.DeletedAt,
+		&reactionsJSON,
+	)
+	if err != nil {
+		return domain_models.Message{}, fmt.Errorf("scan message: %w", err)
+	}
+	if reactionsJSON != "" && reactionsJSON != "[]" {
+		var rawReactions []struct {
+			Emoji          string   `json:"emoji"`
+			Count          int      `json:"count"`
+			Users          []string `json:"users"`
+			IsReactedByMe  bool     `json:"is_reacted_by_me"`
+		}
+		if err := json.Unmarshal([]byte(reactionsJSON), &rawReactions); err == nil {
+			m.Reactions = make([]domain_models.MessageReaction, len(rawReactions))
+			for i, r := range rawReactions {
+				m.Reactions[i] = domain_models.MessageReaction{
+					Emoji:          r.Emoji,
+					Count:          r.Count,
+					Users:          r.Users,
+					IsReactedByMe:  r.IsReactedByMe,
+				}
+			}
+		}
 	}
 	return m, nil
 }

@@ -7,6 +7,7 @@ import type {
   MessageDeletedPayload,
   MessageEditedPayload,
   NewMessagePayload,
+  ReactionPayload,
   Room,
   UserTypingPayload,
   WSEvent,
@@ -74,6 +75,25 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
         }, TYPING_CLEAR_MS)
 
         typingTimers.current.set(key, timer)
+        break
+      }
+      case 'reaction_added': {
+        const p = event.payload as ReactionPayload
+        // Store handles deduplication, but we need to ensure isReactedByMe is correct for own reactions
+        chat.addReaction(p.room_id, p.message_id, p.emoji, p.user_id)
+        break
+      }
+      case 'reaction_removed': {
+        const p = event.payload as ReactionPayload
+        chat.removeReaction(p.room_id, p.message_id, p.emoji, p.user_id)
+        break
+      }
+      case 'error': {
+        const p = event.payload as { message: string }
+        // Rollback optimistic reaction updates on error
+        // The error payload doesn't have enough info to know which reaction failed,
+        // so we rely on the server not sending reaction_added/removed for failed operations
+        console.warn('[WS] Server error:', p.message)
         break
       }
       default:

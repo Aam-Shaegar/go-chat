@@ -27,7 +27,7 @@ type Repository interface {
 	SaveMessage(ctx context.Context, msg domain_models.Message) (domain_models.Message, error)
 	EditMessage(ctx context.Context, messageID, roomID, userID, content string, updatedAt time.Time) (domain_models.Message, error)
 	DeleteMessage(ctx context.Context, messageID, roomID, userID string, deletedAt time.Time) (domain_models.Message, error)
-	AddReaction(ctx context.Context, roomID string, reaction domain_models.MessageReaction) (domain_models.Message, error)
+	AddReaction(ctx context.Context, roomID string, reaction domain_models.RawMessageReaction) (domain_models.Message, error)
 	RemoveReaction(ctx context.Context, messageID, roomID, userID, emoji string) (domain_models.Message, error)
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
 }
@@ -182,7 +182,7 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 		return err
 	}
 
-	msg, err := s.repo.AddReaction(ctx, roomID, domain_models.MessageReaction{
+	msg, err := s.repo.AddReaction(ctx, roomID, domain_models.RawMessageReaction{
 		MessageID: p.MessageID,
 		UserID:    client.ID,
 		Emoji:     p.Emoji,

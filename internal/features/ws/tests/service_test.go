@@ -38,7 +38,7 @@ func (m *MockRepository) DeleteMessage(ctx context.Context, messageID, roomID, u
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) AddReaction(ctx context.Context, roomID string, reaction domain_models.MessageReaction) (domain_models.Message, error) {
+func (m *MockRepository) AddReaction(ctx context.Context, roomID string, reaction domain_models.RawMessageReaction) (domain_models.Message, error) {
 	args := m.Called(ctx, roomID, reaction)
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
@@ -304,7 +304,9 @@ func TestHandle_AddReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
-	repo.On("AddReaction", mock.Anything, "room-1", mock.Anything).Return(reactionMsg, nil)
+	repo.On("AddReaction", mock.Anything, "room-1", mock.MatchedBy(func(r domain_models.RawMessageReaction) bool {
+		return r.MessageID == "msg-1" && r.UserID == "user-1" && r.Emoji == "👍"
+	})).Return(reactionMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeReactionAdded &&

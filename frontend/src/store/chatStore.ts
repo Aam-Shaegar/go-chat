@@ -28,6 +28,8 @@ interface ChatState {
   updateMessage: (roomId: string, messageId: string, content: string, updatedAt: string) => void
   deleteMessage: (roomId: string, messageId: string) => void
   touchRoom: (roomId: string, at: string) => void
+  addReaction: (roomId: string, messageId: string, emoji: string, userId: string) => void
+  removeReaction: (roomId: string, messageId: string, emoji: string, userId: string) => void
 
   setUnreadCounts: (counts: Record<string, number>) => void
   incrementUnread: (roomId: string) => void
@@ -185,6 +187,64 @@ export const useChatStore = create<ChatState>((set) => ({
       return {
         messages: { ...s.messages, [roomId]: messages },
         lastMessages,
+      }
+    }),
+
+  addReaction: (roomId: string, messageId: string, emoji: string, userId: string) =>
+    set((s) => {
+      const messages = (s.messages[roomId] ?? []).map((m) => {
+        if (m.id !== messageId) return m
+        const reactions = m.reactions ?? []
+        const existing = reactions.find((r) => r.emoji === emoji)
+        if (existing) {
+          if (existing.users.includes(userId)) {
+            // User already reacted, but need to update isReactedByMe if it's the current user
+            return {
+              ...m,
+              reactions: reactions.map((r) =>
+                r.emoji === emoji
+                  ? { ...r, isReactedByMe: r.users.includes(userId) || r.isReactedByMe }
+                  : r
+              ),
+            }
+          }
+          return {
+            ...m,
+            reactions: reactions.map((r) =>
+              r.emoji === emoji
+                ? { ...r, count: r.count + 1, users: [...r.users, userId], isReactedByMe: r.isReactedByMe || r.users.includes(userId) }
+                : r
+            ),
+          }
+        }
+        return {
+          ...m,
+          reactions: [...reactions, { emoji, count: 1, users: [userId], isReactedByMe: true }],
+        }
+      })
+      const last = latestMessage(messages)
+      return {
+        messages: { ...s.messages, [roomId]: messages },
+        lastMessages: last ? { ...s.lastMessages, [roomId]: last } : s.lastMessages,
+      }
+    }),
+
+  removeReaction: (roomId: string, messageId: string, emoji: string, userId: string) =>
+    set((s) => {
+      const messages = (s.messages[roomId] ?? []).map((m) => {
+        if (m.id !== messageId) return m
+        const reactions = (m.reactions ?? []).map((r) => {
+          if (r.emoji !== emoji) return r
+          const users = r.users.filter((u) => u !== userId)
+          if (users.length === 0) return null
+          return { ...r, count: users.length, users, isReactedByMe: users.includes(userId) }
+        }).filter((r): r is NonNullable<typeof r> => r !== null)
+        return { ...m, reactions }
+      })
+      const last = latestMessage(messages)
+      return {
+        messages: { ...s.messages, [roomId]: messages },
+        lastMessages: last ? { ...s.lastMessages, [roomId]: last } : s.lastMessages,
       }
     }),
 
