@@ -354,7 +354,7 @@ function MessageBubble({ message, isMine, showUsername }: {
           )}
           <p className="whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{message.content}</p>
           
-          {!isDeleted && hasReactions && (
+          {!isDeleted && (
             <ReactionsRow
               reactions={reactions}
               currentUserId={user?.id}
