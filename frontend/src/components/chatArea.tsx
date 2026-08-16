@@ -368,16 +368,17 @@ function MessageBubble({ message, isMine, showUsername }: {
             {edited && <span>edited</span>}
             <span>{formatTime(message.created_at)}</span>
           </div>
+
+          {!isDeleted && showReactionPicker && (
+            <ReactionPicker
+              ref={pickerRef}
+              onSelect={handleAddReaction}
+              onClose={() => setShowReactionPicker(false)}
+            />
+          )}
         </div>
       </div>
 
-{!isDeleted && showReactionPicker && (
-        <ReactionPicker
-          ref={pickerRef}
-          onSelect={handleAddReaction}
-          onClose={() => setShowReactionPicker(false)}
-        />
-)}
     </div>
   )
 }
