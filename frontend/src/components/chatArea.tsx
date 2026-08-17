@@ -470,18 +470,32 @@ const ReactionPicker = forwardRef<
 
     let left: number
     let top: number
+    const GAP = 8
 
     if (isMine) {
-      left = rect.left - pickerWidth - 8
-      if (left < 8) left = 8
+      // Prefer left side: picker right edge at message left - GAP
+      left = rect.left - pickerWidth - GAP
+      // If not enough space on left, flip to right side
+      if (left < GAP) {
+        left = rect.right + GAP
+      }
     } else {
-      left = rect.right + 8
-      if (left + pickerWidth > viewportWidth - 8) left = viewportWidth - pickerWidth - 8
+      // Prefer right side: picker left edge at message right + GAP
+      left = rect.right + GAP
+      // If not enough space on right, flip to left side
+      if (left + pickerWidth > viewportWidth - GAP) {
+        left = rect.left - pickerWidth - GAP
+      }
     }
 
+    // Clamp left to viewport
+    if (left < GAP) left = GAP
+    if (left + pickerWidth > viewportWidth - GAP) left = viewportWidth - pickerWidth - GAP
+
+    // Vertical: center on message bubble
     top = rect.top + (rect.height - pickerHeight) / 2
-    if (top < 8) top = 8
-    if (top + pickerHeight > viewportHeight - 8) top = viewportHeight - pickerHeight - 8
+    if (top < GAP) top = GAP
+    if (top + pickerHeight > viewportHeight - GAP) top = viewportHeight - pickerHeight - GAP
 
     setPosition({ top, left })
   }, [isMine])
