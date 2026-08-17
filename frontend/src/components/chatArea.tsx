@@ -391,7 +391,7 @@ function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOp
   isOpen: boolean
 }) {
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 max-w-[280px]">
       {reactions.map((reaction) => {
         const isReactedByMe =
           reaction.isReactedByMe || reaction.users.includes(currentUserId ?? '')
@@ -405,17 +405,17 @@ function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOp
               e.preventDefault()
               onPickerToggle(true)
             }}
-            className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs transition ${
+            className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs transition shrink-0 ${
               isReactedByMe
                 ? 'border-[#229ed9]/30 bg-[#229ed9]/10 text-[#229ed9]'
-                : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
             }`}
             aria-label={`${reaction.emoji} ${reaction.count}`}
           >
             <span className="text-sm leading-none">{reaction.emoji}</span>
 
             {reaction.count > 1 && (
-              <span className="font-medium leading-none">
+              <span className="font-medium leading-none text-slate-500">
                 {reaction.count}
               </span>
             )}
@@ -427,7 +427,7 @@ function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOp
         type="button"
         onClick={() => onPickerToggle(!isOpen)}
         onContextMenu={(e) => e.preventDefault()}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 border border-slate-200 bg-white shadow-sm"
         aria-label="Add reaction"
         title="Add reaction"
       >
@@ -453,8 +453,31 @@ const ReactionPicker = forwardRef<
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [focusedIndex, setFocusedIndex] = useState(0)
+  const [position, setPosition] = useState<{ left: number; bottom: number; align: 'left' | 'right' }>({
+    left: 0,
+    bottom: 38,
+    align: 'left'
+  })
 
   useImperativeHandle(ref, () => containerRef.current, [])
+
+  useEffect(() => {
+    const container = containerRef.current
+    const bubble = container?.closest('[data-message-id]') as HTMLElement
+    if (!container || !bubble) return
+
+    const rect = bubble.getBoundingClientRect()
+    const pickerWidth = 7 * 36 + 6 * 4 + 16
+    const viewportWidth = window.innerWidth
+    const alignRight = isMine || rect.right - pickerWidth < 0
+    const left = alignRight ? rect.width - pickerWidth : 0
+
+    setPosition({
+      left,
+      bottom: 38,
+      align: alignRight ? 'right' : 'left'
+    })
+  }, [isMine])
 
   useEffect(() => {
     const container = containerRef.current
@@ -507,9 +530,11 @@ const ReactionPicker = forwardRef<
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-full z-50 mb-2 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${
-        isMine ? 'right-0' : 'left-0'
-      }`}
+      style={{
+        left: position.left,
+        bottom: position.bottom,
+      } as React.CSSProperties}
+      className={`absolute z-50 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${position.align}`}
       role="dialog"
       aria-label="Choose reaction"
     >
@@ -524,9 +549,9 @@ const ReactionPicker = forwardRef<
             onSelect(emoji)
             onClose()
           }}
-          className={`grid h-8 w-8 place-items-center rounded-lg text-lg transition ${
+          className={`grid h-9 w-9 place-items-center rounded-lg text-lg transition ${
             index === focusedIndex
-              ? 'bg-slate-100 ring-1 ring-[#229ed9]'
+              ? 'bg-slate-100 ring-2 ring-[#229ed9]'
               : 'hover:bg-slate-100'
           }`}
           aria-label={emoji}
