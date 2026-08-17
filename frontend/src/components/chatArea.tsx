@@ -453,52 +453,8 @@ const ReactionPicker = forwardRef<
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [focusedIndex, setFocusedIndex] = useState(0)
-  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
   useImperativeHandle(ref, () => containerRef.current, [])
-
-  useEffect(() => {
-    const container = containerRef.current
-    const bubble = container?.closest('[data-message-id]') as HTMLElement
-    if (!container || !bubble) return
-
-    const rect = bubble.getBoundingClientRect()
-    const pickerWidth = 7 * 40 + 6 * 4 + 16
-    const pickerHeight = 2 * 40 + 4 + 16
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-
-    let left: number
-    let top: number
-    const GAP = 8
-
-    if (isMine) {
-      // Prefer left side: picker right edge at message left - GAP
-      left = rect.left - pickerWidth - GAP
-      // If not enough space on left, flip to right side
-      if (left < GAP) {
-        left = rect.right + GAP
-      }
-    } else {
-      // Prefer right side: picker left edge at message right + GAP
-      left = rect.right + GAP
-      // If not enough space on right, flip to left side
-      if (left + pickerWidth > viewportWidth - GAP) {
-        left = rect.left - pickerWidth - GAP
-      }
-    }
-
-    // Clamp left to viewport
-    if (left < GAP) left = GAP
-    if (left + pickerWidth > viewportWidth - GAP) left = viewportWidth - pickerWidth - GAP
-
-    // Vertical: center on message bubble
-    top = rect.top + (rect.height - pickerHeight) / 2
-    if (top < GAP) top = GAP
-    if (top + pickerHeight > viewportHeight - GAP) top = viewportHeight - pickerHeight - GAP
-
-    setPosition({ top, left })
-  }, [isMine])
 
   useEffect(() => {
     const container = containerRef.current
@@ -549,38 +505,36 @@ const ReactionPicker = forwardRef<
   }, [focusedIndex])
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        top: position.top,
-        left: position.left,
-      } as React.CSSProperties}
-      className="fixed z-50 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
-      role="dialog"
-      aria-label="Choose reaction"
-    >
-      {emojis.map((emoji, index) => (
-        <button
-          key={emoji}
-          ref={(el) => {
-            buttonRefs.current[index] = el
-          }}
-          type="button"
-          onClick={() => {
-            onSelect(emoji)
-            onClose()
-          }}
-          className={`grid h-10 w-10 place-items-center rounded-lg text-lg transition ${
-            index === focusedIndex
-              ? 'bg-slate-100 ring-2 ring-[#229ed9]'
-              : 'hover:bg-slate-100'
-          }`}
-          aria-label={emoji}
-          aria-selected={index === focusedIndex}
-        >
-          {emoji}
-        </button>
-      ))}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+      <div
+        ref={containerRef}
+        className="grid grid-cols-7 gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+        role="dialog"
+        aria-label="Choose reaction"
+      >
+        {emojis.map((emoji, index) => (
+          <button
+            key={emoji}
+            ref={(el) => {
+              buttonRefs.current[index] = el
+            }}
+            type="button"
+            onClick={() => {
+              onSelect(emoji)
+              onClose()
+            }}
+            className={`grid h-12 w-12 place-items-center rounded-xl text-xl transition ${
+              index === focusedIndex
+                ? 'bg-slate-100 ring-2 ring-[#229ed9] scale-105'
+                : 'hover:bg-slate-100 hover:scale-105'
+            }`}
+            aria-label={emoji}
+            aria-selected={index === focusedIndex}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
     </div>
   )
 })
