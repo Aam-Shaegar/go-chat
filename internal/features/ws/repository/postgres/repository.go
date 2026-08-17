@@ -119,10 +119,12 @@ func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction 
 				WHERE room_id=$2 AND user_id=$3
 			)
 		),
-		inserted AS (
+		upserted AS (
 			INSERT INTO gochat.message_reactions (message_id, user_id, emoji, created_at)
 			SELECT id, $3, $4, $5 FROM authorized
-			ON CONFLICT DO NOTHING
+			ON CONFLICT (message_id, user_id) DO UPDATE SET
+				emoji = EXCLUDED.emoji,
+				created_at = EXCLUDED.created_at
 			RETURNING message_id
 		),
 		reactions_agg AS (
@@ -147,7 +149,7 @@ func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction 
 		       COALESCE(ra.reactions_json, '[]'::json)
 		FROM authorized a
 		JOIN gochat.users u ON u.id = a.user_id
-		LEFT JOIN inserted i ON i.message_id = a.id
+		LEFT JOIN upserted i ON i.message_id = a.id
 		CROSS JOIN reactions_agg ra;
 	`
 	row := r.pool.QueryRow(ctx, query, reaction.MessageID, roomID, reaction.UserID, reaction.Emoji, reaction.CreatedAt)
@@ -161,7 +163,7 @@ func (r *WSRepository) AddReaction(ctx context.Context, roomID string, reaction 
 	return msg, nil
 }
 
-func (r *WSRepository) RemoveReaction(ctx context.Context, messageID, roomID, userID, emoji string) (domain_models.Message, error) {
+func (r *WSRepository) RemoveReaction(ctx context.Context, messageID, roomID, userID string) (domain_models.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -178,7 +180,7 @@ func (r *WSRepository) RemoveReaction(ctx context.Context, messageID, roomID, us
 		),
 		deleted AS (
 			DELETE FROM gochat.message_reactions
-			WHERE message_id=$1 AND user_id=$3 AND emoji=$4
+			WHERE message_id=$1 AND user_id=$3
 			RETURNING message_id
 		),
 		reactions_agg AS (
@@ -206,7 +208,7 @@ func (r *WSRepository) RemoveReaction(ctx context.Context, messageID, roomID, us
 		LEFT JOIN deleted d ON d.message_id = a.id
 		CROSS JOIN reactions_agg ra;
 	`
-	row := r.pool.QueryRow(ctx, query, messageID, roomID, userID, emoji)
+	row := r.pool.QueryRow(ctx, query, messageID, roomID, userID)
 	msg, err := scanMessageWithReactions(row)
 	if err != nil {
 		if errors.Is(err, core_postgres_pool.ErrNoRows) {

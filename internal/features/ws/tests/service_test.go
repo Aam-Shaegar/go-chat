@@ -43,8 +43,8 @@ func (m *MockRepository) AddReaction(ctx context.Context, roomID string, reactio
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
-func (m *MockRepository) RemoveReaction(ctx context.Context, messageID, roomID, userID, emoji string) (domain_models.Message, error) {
-	args := m.Called(ctx, messageID, roomID, userID, emoji)
+func (m *MockRepository) RemoveReaction(ctx context.Context, messageID, roomID, userID string) (domain_models.Message, error) {
+	args := m.Called(ctx, messageID, roomID, userID)
 	return args.Get(0).(domain_models.Message), args.Error(1)
 }
 
@@ -338,7 +338,7 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
-	repo.On("RemoveReaction", mock.Anything, "msg-1", "room-1", "user-1", "👍").Return(reactionMsg, nil)
+	repo.On("RemoveReaction", mock.Anything, "msg-1", "room-1", "user-1").Return(reactionMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeReactionRemoved &&
