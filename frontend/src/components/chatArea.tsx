@@ -453,11 +453,7 @@ const ReactionPicker = forwardRef<
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [focusedIndex, setFocusedIndex] = useState(0)
-  const [position, setPosition] = useState<{ left: number; bottom: number; align: 'left' | 'right' }>({
-    left: 0,
-    bottom: 38,
-    align: 'left'
-  })
+  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
   useImperativeHandle(ref, () => containerRef.current, [])
 
@@ -467,16 +463,27 @@ const ReactionPicker = forwardRef<
     if (!container || !bubble) return
 
     const rect = bubble.getBoundingClientRect()
-    const pickerWidth = 7 * 36 + 6 * 4 + 16
+    const pickerWidth = 7 * 40 + 6 * 4 + 16
+    const pickerHeight = 2 * 40 + 4 + 16
     const viewportWidth = window.innerWidth
-    const alignRight = isMine || rect.right - pickerWidth < 0
-    const left = alignRight ? rect.width - pickerWidth : 0
+    const viewportHeight = window.innerHeight
 
-    setPosition({
-      left,
-      bottom: 38,
-      align: alignRight ? 'right' : 'left'
-    })
+    let left: number
+    let top: number
+
+    if (isMine) {
+      left = rect.left - pickerWidth - 8
+      if (left < 8) left = 8
+    } else {
+      left = rect.right + 8
+      if (left + pickerWidth > viewportWidth - 8) left = viewportWidth - pickerWidth - 8
+    }
+
+    top = rect.top + (rect.height - pickerHeight) / 2
+    if (top < 8) top = 8
+    if (top + pickerHeight > viewportHeight - 8) top = viewportHeight - pickerHeight - 8
+
+    setPosition({ top, left })
   }, [isMine])
 
   useEffect(() => {
@@ -531,10 +538,10 @@ const ReactionPicker = forwardRef<
     <div
       ref={containerRef}
       style={{
+        top: position.top,
         left: position.left,
-        bottom: position.bottom,
       } as React.CSSProperties}
-      className={`absolute z-50 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${position.align}`}
+      className="fixed z-50 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
       role="dialog"
       aria-label="Choose reaction"
     >
@@ -549,7 +556,7 @@ const ReactionPicker = forwardRef<
             onSelect(emoji)
             onClose()
           }}
-          className={`grid h-9 w-9 place-items-center rounded-lg text-lg transition ${
+          className={`grid h-10 w-10 place-items-center rounded-lg text-lg transition ${
             index === focusedIndex
               ? 'bg-slate-100 ring-2 ring-[#229ed9]'
               : 'hover:bg-slate-100'
