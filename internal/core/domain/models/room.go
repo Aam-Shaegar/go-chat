@@ -11,6 +11,7 @@ type Room struct {
 	OwnerID       string     `json:"owner_id"`
 	CreatedAt     time.Time  `json:"created_at"`
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
+	OtherUserID   string     `json:"other_user_id,omitempty"`
 }
 
 func NewRoom(id, name, description string, isPrivate, isDM bool, ownerID string, createdAt time.Time) Room {

@@ -38,6 +38,28 @@ type Hub interface {
 	Unregister(client *ws_client.Client)
 }
 
+type ServiceInterface interface {
+	Handle(client *ws_client.Client, event ws_domain.IncomingEvent)
+	OnClose(client *ws_client.Client)
+	OnConnect(client *ws_client.Client)
+}
+
+func (s *WSService) OnConnect(client *ws_client.Client) {
+	if client.RoomID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = s.publishRoomEvent(ctx, client.RoomID, ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserJoined,
+		Payload: ws_domain.UserJoinedPayload{
+			RoomID:   client.RoomID,
+			UserID:   client.ID,
+			Username: client.Username,
+		},
+	}, map[string]struct{}{client.ID: {}})
+}
+
 // Handle — точка входа для всех входящих событий от клиента
 func (s *WSService) Handle(client *ws_client.Client, event ws_domain.IncomingEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)

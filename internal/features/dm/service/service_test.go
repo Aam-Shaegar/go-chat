@@ -47,6 +47,15 @@ func (m *MockUserRepository) GetUser(ctx context.Context, userID string) (domain
 	return args.Get(0).(domain_models.User), args.Error(1)
 }
 
+type MockRoomRepository struct {
+	mock.Mock
+}
+
+func (m *MockRoomRepository) GetMembers(ctx context.Context, roomID string) ([]domain_models.RoomMember, error) {
+	args := m.Called(ctx, roomID)
+	return args.Get(0).([]domain_models.RoomMember), args.Error(1)
+}
+
 // --- Хелперы ---
 
 func newTestRoom(id string) domain_models.Room {
@@ -64,17 +73,18 @@ func newTestUser(id string) domain_models.User {
 	}
 }
 
-func newService() (*dm_service.DMService, *MockRepository, *MockUserRepository) {
+func newService() (*dm_service.DMService, *MockRepository, *MockUserRepository, *MockRoomRepository) {
 	repo := new(MockRepository)
 	userRepo := new(MockUserRepository)
-	svc := dm_service.NewDMService(repo, userRepo)
-	return svc, repo, userRepo
+	roomRepo := new(MockRoomRepository)
+	svc := dm_service.NewDMService(repo, roomRepo, userRepo)
+	return svc, repo, userRepo, roomRepo
 }
 
 // --- OpenDM тесты ---
 
 func TestOpenDM_Success_CreateNew(t *testing.T) {
-	svc, repo, userRepo := newService()
+	svc, repo, userRepo, _ := newService()
 	ctx := context.Background()
 	requesterID := "user-1"
 	targetID := "user-2"
@@ -93,7 +103,7 @@ func TestOpenDM_Success_CreateNew(t *testing.T) {
 }
 
 func TestOpenDM_Success_Existing(t *testing.T) {
-	svc, repo, userRepo := newService()
+	svc, repo, userRepo, _ := newService()
 	ctx := context.Background()
 	requesterID := "user-1"
 	targetID := "user-2"
@@ -110,7 +120,7 @@ func TestOpenDM_Success_Existing(t *testing.T) {
 }
 
 func TestOpenDM_Self(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	ctx := context.Background()
 	userID := "user-1"
 
@@ -122,7 +132,7 @@ func TestOpenDM_Self(t *testing.T) {
 }
 
 func TestOpenDM_TargetUserNotFound(t *testing.T) {
-	svc, _, userRepo := newService()
+	svc, _, userRepo, _ := newService()
 	ctx := context.Background()
 	requesterID := "user-1"
 	targetID := "user-2"
@@ -138,7 +148,7 @@ func TestOpenDM_TargetUserNotFound(t *testing.T) {
 }
 
 func TestOpenDM_FindDMError(t *testing.T) {
-	svc, repo, userRepo := newService()
+	svc, repo, userRepo, _ := newService()
 	ctx := context.Background()
 	requesterID := "user-1"
 	targetID := "user-2"
@@ -157,7 +167,7 @@ func TestOpenDM_FindDMError(t *testing.T) {
 }
 
 func TestOpenDM_CreateDMError(t *testing.T) {
-	svc, repo, userRepo := newService()
+	svc, repo, userRepo, _ := newService()
 	ctx := context.Background()
 	requesterID := "user-1"
 	targetID := "user-2"
@@ -178,7 +188,7 @@ func TestOpenDM_CreateDMError(t *testing.T) {
 // --- GetUserDMs тесты ---
 
 func TestGetUserDMs_Success(t *testing.T) {
-	svc, repo, _ := newService()
+	svc, repo, _, roomRepo := newService()
 	ctx := context.Background()
 	userID := "user-1"
 	expectedRooms := []domain_models.Room{
@@ -187,16 +197,20 @@ func TestGetUserDMs_Success(t *testing.T) {
 	}
 
 	repo.On("GetUserDMs", ctx, userID).Return(expectedRooms, nil)
+	roomRepo.On("GetMembers", ctx, "dm-1").Return([]domain_models.RoomMember{{UserID: "user-2"}}, nil)
+	roomRepo.On("GetMembers", ctx, "dm-2").Return([]domain_models.RoomMember{{UserID: "user-3"}}, nil)
 
 	rooms, err := svc.GetUserDMs(ctx, userID)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedRooms, rooms)
+	assert.Equal(t, "user-2", rooms[0].OtherUserID)
+	assert.Equal(t, "user-3", rooms[1].OtherUserID)
 	repo.AssertExpectations(t)
+	roomRepo.AssertExpectations(t)
 }
 
 func TestGetUserDMs_Empty(t *testing.T) {
-	svc, repo, _ := newService()
+	svc, repo, _, _ := newService()
 	ctx := context.Background()
 	userID := "user-1"
 
@@ -210,7 +224,7 @@ func TestGetUserDMs_Empty(t *testing.T) {
 }
 
 func TestGetUserDMs_RepoError(t *testing.T) {
-	svc, repo, _ := newService()
+	svc, repo, _, _ := newService()
 	ctx := context.Background()
 	userID := "user-1"
 	dbErr := errors.New("query error")

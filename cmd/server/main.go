@@ -98,7 +98,7 @@ func main() {
 	roomsSvc := rooms_service.NewRoomsService(roomsRepo)
 	messagesSvc := messages_service.NewMessagesService(messagesRepo, roomsRepo)
 	readSvc := reads_service.NewReadsService(readsRepo, roomsRepo)
-	dmSvc := dm_service.NewDMService(dmRepo, usersRepo)
+	dmSvc := dm_service.NewDMService(dmRepo, roomsRepo, usersRepo)
 
 	// WebSocket Hub
 	hub := ws_hub.NewHub(redisClient, logger)

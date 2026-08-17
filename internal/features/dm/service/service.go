@@ -11,12 +11,17 @@ import (
 )
 
 type DMService struct {
-	repo     Repository
-	userRepo UserRepository
+	repo      Repository
+	roomRepo  RoomRepository
+	userRepo  UserRepository
 }
 
-func NewDMService(repo Repository, userRepo UserRepository) *DMService {
-	return &DMService{repo: repo, userRepo: userRepo}
+func NewDMService(repo Repository, roomRepo RoomRepository, userRepo UserRepository) *DMService {
+	return &DMService{repo: repo, roomRepo: roomRepo, userRepo: userRepo}
+}
+
+type RoomRepository interface {
+	GetMembers(ctx context.Context, roomID string) ([]domain_models.RoomMember, error)
 }
 
 type Repository interface {
@@ -62,5 +67,23 @@ func (s *DMService) OpenDM(ctx context.Context, requesterID, targetUserID string
 }
 
 func (s *DMService) GetUserDMs(ctx context.Context, userID string) ([]domain_models.Room, error) {
-	return s.repo.GetUserDMs(ctx, userID)
+	rooms, err := s.repo.GetUserDMs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	// Populate OtherUserID for each DM
+	for i := range rooms {
+		if rooms[i].IsDM {
+			members, err := s.roomRepo.GetMembers(ctx, rooms[i].ID)
+			if err == nil {
+				for _, m := range members {
+					if m.UserID != userID {
+						rooms[i].OtherUserID = m.UserID
+						break
+					}
+				}
+			}
+		}
+	}
+	return rooms, nil
 }

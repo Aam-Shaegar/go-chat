@@ -9,6 +9,8 @@ import type {
   NewMessagePayload,
   ReactionPayload,
   Room,
+  UserJoinedPayload,
+  UserLeftPayload,
   UserTypingPayload,
   WSEvent,
 } from '../types'
@@ -85,6 +87,18 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
       case 'reaction_removed': {
         const p = event.payload as ReactionPayload
         chat.removeReaction(p.room_id, p.message_id, p.emoji, p.user_id, p.is_reacted_by_me)
+        break
+      }
+      case 'user_joined': {
+        const p = event.payload as UserJoinedPayload
+        if (p.user_id === auth.user?.id) break
+        chat.setUserOnline(p.room_id, p.user_id)
+        break
+      }
+      case 'user_left': {
+        const p = event.payload as UserLeftPayload
+        if (p.user_id === auth.user?.id) break
+        chat.setUserOffline(p.room_id, p.user_id)
         break
       }
       case 'error': {

@@ -20,6 +20,7 @@ export interface Room {
   owner_id: string
   created_at: string
   last_message_at?: string
+  other_user_id?: string
 }
 
 export interface RoomMember {
@@ -109,6 +110,18 @@ export interface MessageDeletedPayload {
 }
 
 export interface UserTypingPayload {
+  room_id: string
+  user_id: string
+  username: string
+}
+
+export interface UserJoinedPayload {
+  room_id: string
+  user_id: string
+  username: string
+}
+
+export interface UserLeftPayload {
   room_id: string
   user_id: string
   username: string

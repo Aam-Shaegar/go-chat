@@ -14,6 +14,7 @@ interface ChatState {
   unreadCounts: Record<string, number>
   typingUsers: Record<string, string[]>
   connectionStates: Record<string, RoomConnectionState>
+  presence: Record<string, Set<string>>
 
   setRooms: (rooms: Room[]) => void
   setDMs: (dms: Room[]) => void
@@ -28,8 +29,8 @@ interface ChatState {
   updateMessage: (roomId: string, messageId: string, content: string, updatedAt: string) => void
   deleteMessage: (roomId: string, messageId: string) => void
   touchRoom: (roomId: string, at: string) => void
-  addReaction: (roomId: string, messageId: string, emoji: string, userId: string) => void
-  removeReaction: (roomId: string, messageId: string, emoji: string, userId: string) => void
+  addReaction: (roomId: string, messageId: string, emoji: string, userId: string, isReactedByMe: boolean) => void
+  removeReaction: (roomId: string, messageId: string, emoji: string, userId: string, isReactedByMe: boolean) => void
 
   setUnreadCounts: (counts: Record<string, number>) => void
   incrementUnread: (roomId: string) => void
@@ -39,6 +40,10 @@ interface ChatState {
   clearTyping: (roomId: string, username: string) => void
   clearRoomTyping: (roomId: string) => void
   setConnectionState: (roomId: string, state: RoomConnectionState) => void
+  setUserOnline: (roomId: string, userId: string) => void
+  setUserOffline: (roomId: string, userId: string) => void
+  getOnlineCount: (roomId: string, currentUserId?: string) => number
+  isUserOnline: (roomId: string, userId: string) => boolean
   resetChat: () => void
 }
 
@@ -71,7 +76,7 @@ const seedActivity = (rooms: Room[], current: Record<string, string>) => {
   return next
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   rooms: [],
   dms: [],
   dmNames: {},
@@ -82,6 +87,7 @@ export const useChatStore = create<ChatState>((set) => ({
   unreadCounts: {},
   typingUsers: {},
   connectionStates: {},
+  presence: {},
 
   setRooms: (rooms) =>
     set((s) => {
@@ -296,6 +302,35 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       connectionStates: { ...s.connectionStates, [roomId]: state },
     })),
+
+  setUserOnline: (roomId, userId) =>
+    set((s) => {
+      const roomPresence = s.presence[roomId] ?? new Set<string>()
+      const nextPresence = new Set(roomPresence)
+      nextPresence.add(userId)
+      return { presence: { ...s.presence, [roomId]: nextPresence } }
+    }),
+
+  setUserOffline: (roomId, userId) =>
+    set((s) => {
+      const roomPresence = s.presence[roomId]
+      if (!roomPresence) return {}
+      const nextPresence = new Set(roomPresence)
+      nextPresence.delete(userId)
+      return { presence: { ...s.presence, [roomId]: nextPresence } }
+    }),
+
+  getOnlineCount: (roomId, currentUserId) => {
+    const roomPresence = get().presence[roomId]
+    if (!roomPresence) return 0
+    if (currentUserId && roomPresence.has(currentUserId)) return roomPresence.size - 1
+    return roomPresence.size
+  },
+
+  isUserOnline: (roomId, userId) => {
+    const roomPresence = get().presence[roomId]
+    return roomPresence?.has(userId) ?? false
+  },
 
   resetChat: () => set({
     rooms: [],

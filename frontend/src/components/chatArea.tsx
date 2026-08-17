@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, type RoomConnectionState } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useChatLoader } from '../hooks/useChatLoader'
@@ -14,7 +14,7 @@ interface ChatAreaProps {
 }
 
 export function ChatArea({ onBack }: ChatAreaProps) {
-  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts } = useChatStore()
+  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline } = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
@@ -57,6 +57,11 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const lastMessage = roomMessages[roomMessages.length - 1]
   const activeUnread = activeRoomId ? unreadCounts[activeRoomId] ?? 0 : 0
   const canSend = connectionState === 'connected'
+
+  const onlineCount = activeRoomId ? getOnlineCount(activeRoomId, user?.id) : 0
+  const otherUserId = room?.is_dm ? room.other_user_id : undefined
+  const otherUserOnline = activeRoomId && room?.is_dm && otherUserId ? isUserOnline(activeRoomId, otherUserId) : false
+  const otherUserLastSeen = undefined
 
   const handleLoadMore = useCallback(() => {
     void loadMore(saveScrollPosition, restoreScrollPosition)
@@ -158,7 +163,13 @@ export function ChatArea({ onBack }: ChatAreaProps) {
           <p className="truncate text-xs text-slate-500">
             {otherTyping.length > 0
               ? `${otherTyping.join(', ')} typing`
-              : connectionLabel(connectionState)}
+              : room?.is_dm
+                ? otherUserOnline
+                  ? 'online'
+                  : otherUserLastSeen
+                    ? `last seen ${formatActivity(otherUserLastSeen)}`
+                    : 'offline'
+                : `${onlineCount} online`}
           </p>
         </div>
 
@@ -275,7 +286,7 @@ export function ChatArea({ onBack }: ChatAreaProps) {
         </div>
         {(composerError || !canSend) && (
           <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-slate-500">
-            {composerError || connectionLabel(connectionState)}
+            {composerError || !canSend ? 'Connecting...' : ''}
           </p>
         )}
       </form>

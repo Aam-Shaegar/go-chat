@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, type RoomConnectionState } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { roomsApi, dmApi, usersApi } from '../api/rooms'
 import type { Message, Room, User } from '../types'
@@ -25,6 +25,8 @@ export function Sidebar({ onRoomSelect }: SidebarProps) {
     setRooms,
     setDMs,
     clearUnread,
+    isUserOnline,
+    getOnlineCount,
   } = useChatStore()
   const { user, clearAuth } = useAuthStore()
   const [modal, setModal] = useState<ModalKind>(null)
@@ -136,6 +138,8 @@ export function Sidebar({ onRoomSelect }: SidebarProps) {
                 currentUserId={user?.id}
                 isActive={activeRoomId === room.id}
                 unread={unreadCounts[room.id] ?? 0}
+                isUserOnline={isUserOnline}
+                getOnlineCount={getOnlineCount}
                 onClick={() => handleRoomClick(room.id)}
               />
             ))}
@@ -236,18 +240,23 @@ function FilterButton({ active, onClick, children }: {
   )
 }
 
-function ConversationItem({ room, lastMessage, activityAt, currentUserId, isActive, unread, onClick }: {
+function ConversationItem({ room, lastMessage, activityAt, currentUserId, isActive, unread, isUserOnline, getOnlineCount, onClick }: {
   room: Room
   lastMessage?: Message
   activityAt?: string
   currentUserId?: string
   isActive: boolean
   unread: number
+  isUserOnline: (roomId: string, userId: string) => boolean
+  getOnlineCount: (roomId: string, currentUserId?: string) => number
   onClick: () => void
 }) {
   const title = room.is_dm ? room.name || 'Direct message' : room.name
   const subtitle = lastMessagePreview(room, lastMessage, currentUserId)
   const activityLabel = formatActivity(lastMessage?.created_at ?? activityAt ?? room.last_message_at ?? room.created_at)
+  const onlineCount = getOnlineCount(room.id, currentUserId)
+  const otherUserId = room.is_dm ? room.other_user_id : undefined
+  const isOnline = room.is_dm && otherUserId ? isUserOnline(room.id, otherUserId) : onlineCount > 0
 
   return (
     <button
@@ -257,10 +266,21 @@ function ConversationItem({ room, lastMessage, activityAt, currentUserId, isActi
         isActive ? 'bg-[#229ed9] text-white' : 'text-slate-950 hover:bg-slate-100'
       }`}
     >
-      <Avatar name={title} isDM={room.is_dm} />
+      <div className="relative flex-shrink-0">
+        <Avatar name={title} isDM={room.is_dm} />
+        {room.is_dm && (
+          <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${isOnline ? 'bg-[#35b779]' : 'bg-slate-400'}`} />
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold">{room.is_dm ? title : `#${title}`}</p>
+          {!room.is_dm && onlineCount > 0 && (
+            <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#35b779]" />
+              {onlineCount}
+            </span>
+          )}
           {room.is_private && !room.is_dm && (
             <Icon name="lock" className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-white/70' : 'text-slate-400'}`} />
           )}

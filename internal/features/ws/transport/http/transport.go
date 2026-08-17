@@ -19,16 +19,17 @@ import (
 )
 
 type WSHandler struct {
-	service        WSService
+	service        ServiceInterface
 	hub            Hub
 	roomRepo       RoomRepository
 	tokenValidator TokenValidator
 	allowedOrigins []string
 }
 
-type WSService interface {
+type ServiceInterface interface {
 	Handle(client *ws_client.Client, event ws_domain.IncomingEvent)
 	OnClose(client *ws_client.Client)
+	OnConnect(client *ws_client.Client)
 }
 
 type Hub interface {
@@ -43,7 +44,7 @@ type TokenValidator interface {
 	ValidateAccessToken(ctx context.Context, token string) (string, string, error)
 }
 
-func NewWSHandler(service WSService, hub Hub, roomRepo RoomRepository, tokenValidator TokenValidator, allowedOrigins []string) *WSHandler {
+func NewWSHandler(service ServiceInterface, hub Hub, roomRepo RoomRepository, tokenValidator TokenValidator, allowedOrigins []string) *WSHandler {
 	return &WSHandler{
 		service:        service,
 		hub:            hub,
@@ -138,6 +139,7 @@ func (h *WSHandler) serveWS(w http.ResponseWriter, r *http.Request, roomID strin
 	client := ws_client.NewClient(userID, username, roomID, conn, log)
 	client.Serve(func() {
 		h.hub.Register(client)
+		h.service.OnConnect(client)
 	}, h.service.Handle, h.service.OnClose)
 }
 
