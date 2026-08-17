@@ -194,7 +194,16 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => {
       const messages = (s.messages[roomId] ?? []).map((m) => {
         if (m.id !== messageId) return m
-        const reactions = m.reactions ?? []
+        let reactions = m.reactions ?? []
+
+        // Remove user from any other emoji on this message (single reaction per user)
+        reactions = reactions.map((r) => {
+          if (r.emoji === emoji) return r
+          const users = r.users.filter((u) => u !== userId)
+          if (users.length === 0) return null
+          return { ...r, count: users.length, users, isReactedByMe: users.includes(userId) }
+        }).filter((r): r is NonNullable<typeof r> => r !== null)
+
         const existing = reactions.find((r) => r.emoji === emoji)
         if (existing) {
           if (existing.users.includes(userId)) {
