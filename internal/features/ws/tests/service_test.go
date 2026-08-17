@@ -313,7 +313,8 @@ func TestHandle_AddReaction_Success(t *testing.T) {
 			e.Payload.(ws_domain.ReactionPayload).MessageID == "msg-1" &&
 			e.Payload.(ws_domain.ReactionPayload).RoomID == "room-1" &&
 			e.Payload.(ws_domain.ReactionPayload).UserID == "user-1" &&
-			e.Payload.(ws_domain.ReactionPayload).Emoji == "👍"
+			e.Payload.(ws_domain.ReactionPayload).Emoji == "👍" &&
+			e.Payload.(ws_domain.ReactionPayload).IsReactedByMe == true
 	})).Return(nil)
 
 	svc.Handle(client, event)
@@ -344,7 +345,8 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 			e.Payload.(ws_domain.ReactionPayload).MessageID == "msg-1" &&
 			e.Payload.(ws_domain.ReactionPayload).RoomID == "room-1" &&
 			e.Payload.(ws_domain.ReactionPayload).UserID == "user-1" &&
-			e.Payload.(ws_domain.ReactionPayload).Emoji == "👍"
+			e.Payload.(ws_domain.ReactionPayload).Emoji == "👍" &&
+			e.Payload.(ws_domain.ReactionPayload).IsReactedByMe == false
 	})).Return(nil)
 
 	svc.Handle(client, event)

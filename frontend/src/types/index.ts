@@ -123,6 +123,7 @@ export interface ReactionPayload {
   room_id: string
   user_id: string
   emoji: string
+  is_reacted_by_me: boolean
 }
 
 export interface MessageReaction {

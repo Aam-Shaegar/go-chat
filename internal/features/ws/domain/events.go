@@ -102,10 +102,11 @@ type MessageDeletedPayload struct {
 }
 
 type ReactionPayload struct {
-	MessageID string `json:"message_id"`
-	RoomID    string `json:"room_id"`
-	UserID    string `json:"user_id"`
-	Emoji     string `json:"emoji"`
+	MessageID       string `json:"message_id"`
+	RoomID          string `json:"room_id"`
+	UserID          string `json:"user_id"`
+	Emoji           string `json:"emoji"`
+	IsReactedByMe   bool   `json:"is_reacted_by_me"`
 }
 
 type UserTypingPayload struct {

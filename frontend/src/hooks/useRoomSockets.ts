@@ -79,13 +79,12 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
       }
       case 'reaction_added': {
         const p = event.payload as ReactionPayload
-        // Store handles deduplication, but we need to ensure isReactedByMe is correct for own reactions
-        chat.addReaction(p.room_id, p.message_id, p.emoji, p.user_id)
+        chat.addReaction(p.room_id, p.message_id, p.emoji, p.user_id, p.is_reacted_by_me)
         break
       }
       case 'reaction_removed': {
         const p = event.payload as ReactionPayload
-        chat.removeReaction(p.room_id, p.message_id, p.emoji, p.user_id)
+        chat.removeReaction(p.room_id, p.message_id, p.emoji, p.user_id, p.is_reacted_by_me)
         break
       }
       case 'error': {

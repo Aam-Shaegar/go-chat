@@ -18,14 +18,14 @@ export function useWebSocket(roomId: string | null) {
     return roomSocketHub.send(roomId, 'typing', {})
   }, [roomId])
 
-  const addReaction = useCallback((emoji: string) => {
+  const addReaction = useCallback((messageId: string, emoji: string) => {
     if (!roomId) return false
-    return roomSocketHub.send(roomId, 'add_reaction', { emoji })
+    return roomSocketHub.send(roomId, 'add_reaction', { message_id: messageId, emoji })
   }, [roomId])
 
-  const removeReaction = useCallback((emoji: string) => {
+  const removeReaction = useCallback((messageId: string, emoji: string) => {
     if (!roomId) return false
-    return roomSocketHub.send(roomId, 'remove_reaction', { emoji })
+    return roomSocketHub.send(roomId, 'remove_reaction', { message_id: messageId, emoji })
   }, [roomId])
 
   return { sendMessage, sendTyping, addReaction, removeReaction, connectionState }

@@ -300,18 +300,17 @@ function MessageBubble({ message, isMine, showUsername }: {
   const pickerRef = useRef<HTMLDivElement>(null)
 
   const reactions = message.reactions ?? []
-  const hasReactions = reactions.length > 0
 
   const handleAddReaction = (emoji: string) => {
     if (isDeleted) return
-    if (addReaction(emoji)) {
+    if (addReaction(message.id, emoji)) {
       setShowReactionPicker(false)
     }
   }
 
   const handleRemoveReaction = (emoji: string) => {
     if (isDeleted) return
-    removeReaction(emoji)
+    removeReaction(message.id, emoji)
     setShowReactionPicker(false)
   }
 
@@ -374,6 +373,7 @@ function MessageBubble({ message, isMine, showUsername }: {
               ref={pickerRef}
               onSelect={handleAddReaction}
               onClose={() => setShowReactionPicker(false)}
+              isMine={isMine}
             />
           )}
         </div>
@@ -391,9 +391,11 @@ function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOp
   isOpen: boolean
 }) {
   return (
-    <div className="mt-1.5 flex items-center gap-1">
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
       {reactions.map((reaction) => {
-        const isReactedByMe = reaction.isReactedByMe || reaction.users.includes(currentUserId ?? '')
+        const isReactedByMe =
+          reaction.isReactedByMe || reaction.users.includes(currentUserId ?? '')
+
         return (
           <button
             key={reaction.emoji}
@@ -403,82 +405,100 @@ function ReactionsRow({ reactions, currentUserId, onToggle, onPickerToggle, isOp
               e.preventDefault()
               onPickerToggle(true)
             }}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition ${
+            className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs transition ${
               isReactedByMe
-                ? 'bg-[#229ed9]/15 text-[#229ed9]'
-                : 'text-slate-500 hover:bg-slate-100'
+                ? 'border-[#229ed9]/30 bg-[#229ed9]/10 text-[#229ed9]'
+                : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
             }`}
             aria-label={`${reaction.emoji} ${reaction.count}`}
           >
-            <span>{reaction.emoji}</span>
-            {reaction.count > 1 && <span className="font-medium">{reaction.count}</span>}
+            <span className="text-sm leading-none">{reaction.emoji}</span>
+
+            {reaction.count > 1 && (
+              <span className="font-medium leading-none">
+                {reaction.count}
+              </span>
+            )}
           </button>
         )
       })}
+
       <button
         type="button"
         onClick={() => onPickerToggle(!isOpen)}
         onContextMenu={(e) => e.preventDefault()}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
         aria-label="Add reaction"
+        title="Add reaction"
       >
-        <Icon name="smile" className="h-3.5 w-3.5" />
+        +
       </button>
     </div>
   )
 }
 
-const ReactionPicker = forwardRef<HTMLDivElement, { onSelect: (emoji: string) => void; onClose: () => void }>(
-  ({ onSelect, onClose }, ref) => {
-    const emojis = useMemo(() => ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🤡', '💩', '🎉', '👏', '🤔', '🙏', '💯'], [])
-    const containerRef = useRef<HTMLDivElement>(null)
-    const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
-    const [focusedIndex, setFocusedIndex] = useState(0)
+const ReactionPicker = forwardRef<
+  HTMLDivElement,
+  {
+    onSelect: (emoji: string) => void
+    onClose: () => void
+    isMine: boolean
+  }
+>(({ onSelect, onClose, isMine }, ref) => {
+  const emojis = useMemo(
+    () => ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🤡', '💩', '🎉', '👏', '🤔', '🙏', '💯'],
+    [],
+  )
 
-    useImperativeHandle(ref, () => containerRef.current, [])
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [focusedIndex, setFocusedIndex] = useState(0)
 
-    useEffect(() => {
-      const container = containerRef.current
-      if (!container) return
+  useImperativeHandle(ref, () => containerRef.current, [])
 
-      const handleKeyDown = (e: KeyboardEvent) => {
-        switch (e.key) {
-          case 'ArrowRight':
-            e.preventDefault()
-            setFocusedIndex((i) => (i + 1) % emojis.length)
-            break
-          case 'ArrowLeft':
-            e.preventDefault()
-            setFocusedIndex((i) => (i - 1 + emojis.length) % emojis.length)
-            break
-          case 'Enter':
-          case ' ':
-            e.preventDefault()
-            onSelect(emojis[focusedIndex])
-            onClose()
-            break
-          case 'Escape':
-            e.preventDefault()
-            onClose()
-            break
-          case 'Tab':
-            // Allow default tab behavior but keep focus in picker
-            if (focusedIndex === emojis.length - 1 && !e.shiftKey) {
-              e.preventDefault()
-              buttonRefs.current[0]?.focus()
-              setFocusedIndex(0)
-            } else if (focusedIndex === 0 && e.shiftKey) {
-              e.preventDefault()
-              buttonRefs.current[emojis.length - 1]?.focus()
-              setFocusedIndex(emojis.length - 1)
-            }
-            break
-        }
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowRight':
+          e.preventDefault()
+          setFocusedIndex((i) => (i + 1) % emojis.length)
+          break
+
+        case 'ArrowLeft':
+          e.preventDefault()
+          setFocusedIndex((i) => (i - 1 + emojis.length) % emojis.length)
+          break
+
+        case 'ArrowDown':
+          e.preventDefault()
+          setFocusedIndex((i) => (i + 7) % emojis.length)
+          break
+
+        case 'ArrowUp':
+          e.preventDefault()
+          setFocusedIndex((i) => (i - 7 + emojis.length) % emojis.length)
+          break
+
+        case 'Enter':
+        case ' ':
+          e.preventDefault()
+          onSelect(emojis[focusedIndex])
+          onClose()
+          break
+
+        case 'Escape':
+          e.preventDefault()
+          onClose()
+          break
       }
+    }
 
-      container.addEventListener('keydown', handleKeyDown)
-      return () => container.removeEventListener('keydown', handleKeyDown)
-    }, [emojis, focusedIndex, onSelect, onClose])
+    container.addEventListener('keydown', handleKeyDown)
+    return () => container.removeEventListener('keydown', handleKeyDown)
+  }, [emojis, focusedIndex, onSelect, onClose])
 
   useEffect(() => {
     buttonRefs.current[focusedIndex]?.focus()
@@ -487,19 +507,27 @@ const ReactionPicker = forwardRef<HTMLDivElement, { onSelect: (emoji: string) =>
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-full left-0 mb-1 flex gap-1 rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200"
-      style={{ zIndex: 50 }}
+      className={`absolute bottom-full z-50 mb-2 grid grid-cols-7 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${
+        isMine ? 'right-0' : 'left-0'
+      }`}
       role="dialog"
       aria-label="Choose reaction"
     >
       {emojis.map((emoji, index) => (
         <button
           key={emoji}
-          ref={(el) => { buttonRefs.current[index] = el }}
+          ref={(el) => {
+            buttonRefs.current[index] = el
+          }}
           type="button"
-          onClick={() => { onSelect(emoji); onClose() }}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xl transition ${
-            index === focusedIndex ? 'bg-slate-100 ring-2 ring-[#229ed9]' : 'hover:bg-slate-100'
+          onClick={() => {
+            onSelect(emoji)
+            onClose()
+          }}
+          className={`grid h-8 w-8 place-items-center rounded-lg text-lg transition ${
+            index === focusedIndex
+              ? 'bg-slate-100 ring-1 ring-[#229ed9]'
+              : 'hover:bg-slate-100'
           }`}
           aria-label={emoji}
           aria-selected={index === focusedIndex}

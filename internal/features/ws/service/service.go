@@ -195,10 +195,11 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionAdded,
 		Payload: ws_domain.ReactionPayload{
-			MessageID: p.MessageID,
-			RoomID:    msg.RoomID,
-			UserID:    client.ID,
-			Emoji:     p.Emoji,
+			MessageID:       p.MessageID,
+			RoomID:          msg.RoomID,
+			UserID:          client.ID,
+			Emoji:           p.Emoji,
+			IsReactedByMe:   true,
 		},
 	}, nil)
 }
@@ -224,10 +225,11 @@ func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.
 	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionRemoved,
 		Payload: ws_domain.ReactionPayload{
-			MessageID: p.MessageID,
-			RoomID:    msg.RoomID,
-			UserID:    client.ID,
-			Emoji:     p.Emoji,
+			MessageID:       p.MessageID,
+			RoomID:          msg.RoomID,
+			UserID:          client.ID,
+			Emoji:           p.Emoji,
+			IsReactedByMe:   false,
 		},
 	}, nil)
 }
