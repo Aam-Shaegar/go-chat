@@ -16,7 +16,7 @@ func NewMessagesService(repo Repository, roomRepo RoomRepository) *MessagesServi
 }
 
 type Repository interface {
-	GetMessages(ctx context.Context, roomID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error)
+	GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error)
 }
 
 type RoomRepository interface {

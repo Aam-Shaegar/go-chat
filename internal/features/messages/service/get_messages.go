@@ -31,7 +31,7 @@ func (s *MessagesService) GetMessages(ctx context.Context, roomID, userID string
 	}
 
 	// Запрашиваем limit+1, чтобы понять, есть ли ещё страница
-	messages, err := s.repo.GetMessages(ctx, roomID, before, limit+1)
+	messages, err := s.repo.GetMessages(ctx, roomID, userID, before, limit+1)
 	if err != nil {
 		return GetMessagesResult{}, fmt.Errorf("get messages: %w", err)
 	}

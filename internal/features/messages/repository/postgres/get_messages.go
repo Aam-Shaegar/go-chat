@@ -30,7 +30,7 @@ type messageRow struct {
 // GetMessages возвращает сообщения комнаты с пагинацией по курсору.
 // before — курсор (created_at + id последнего сообщения), nil — самые свежие.
 // Возвращает сообщения от старых к новым.
-func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
+func (r *MessagesRepository) GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -51,7 +51,7 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 						'emoji', mr.emoji,
 						'count', mr.cnt,
 						'users', mr.user_ids,
-						'is_reacted_by_me', false
+						'is_reacted_by_me', mr.user_ids @> ARRAY[$2::uuid]
 					)
 				) FILTER (WHERE mr.emoji IS NOT NULL),
 				'[]'
@@ -74,25 +74,25 @@ func (r *MessagesRepository) GetMessages(ctx context.Context, roomID string, bef
 		query := baseQuery + `
 			GROUP BY m.id, u.username
 			ORDER BY m.created_at DESC, m.id DESC
-			LIMIT $2;
-		`
-		rows, err = r.pool.Query(ctx, query, roomID, limit)
-	} else if before.ID == "" {
-		query := baseQuery + `
-			AND m.created_at < $2
-			GROUP BY m.id, u.username
-			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $3;
 		`
-		rows, err = r.pool.Query(ctx, query, roomID, before.CreatedAt, limit)
-	} else {
+		rows, err = r.pool.Query(ctx, query, roomID, userID, limit)
+	} else if before.ID == "" {
 		query := baseQuery + `
-			AND (m.created_at < $2 OR (m.created_at = $2 AND m.id < $3::uuid))
+			AND m.created_at < $3
 			GROUP BY m.id, u.username
 			ORDER BY m.created_at DESC, m.id DESC
 			LIMIT $4;
 		`
-		rows, err = r.pool.Query(ctx, query, roomID, before.CreatedAt, before.ID, limit)
+		rows, err = r.pool.Query(ctx, query, roomID, userID, before.CreatedAt, limit)
+	} else {
+		query := baseQuery + `
+			AND (m.created_at < $3 OR (m.created_at = $3 AND m.id < $4::uuid))
+			GROUP BY m.id, u.username
+			ORDER BY m.created_at DESC, m.id DESC
+			LIMIT $5;
+		`
+		rows, err = r.pool.Query(ctx, query, roomID, userID, before.CreatedAt, before.ID, limit)
 	}
 
 	if err != nil {

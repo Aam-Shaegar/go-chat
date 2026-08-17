@@ -20,8 +20,8 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) GetMessages(ctx context.Context, roomID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
-	args := m.Called(ctx, roomID, before, limit)
+func (m *MockRepository) GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error) {
+	args := m.Called(ctx, roomID, userID, before, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -75,7 +75,7 @@ func TestGetMessages_PublicRoom_Success(t *testing.T) {
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)
 	// Для публичной комнаты не вызывается IsMember
-	repo.On("GetMessages", ctx, roomID, mock.Anything, limit+1).Return(messages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, limit+1).Return(messages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, limit)
 
@@ -99,7 +99,7 @@ func TestGetMessages_PrivateRoom_Success(t *testing.T) {
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(true, false), nil)
 	roomRepo.On("IsMember", ctx, roomID, userID).Return(true, nil)
-	repo.On("GetMessages", ctx, roomID, mock.Anything, limit+1).Return(messages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, limit+1).Return(messages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, limit)
 
@@ -120,7 +120,7 @@ func TestGetMessages_DMRoom_Success(t *testing.T) {
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(true, true), nil)
 	roomRepo.On("IsMember", ctx, roomID, userID).Return(true, nil)
-	repo.On("GetMessages", ctx, roomID, mock.Anything, limit+1).Return(messages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, limit+1).Return(messages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, limit)
 
@@ -189,7 +189,7 @@ func TestGetMessages_RepoError(t *testing.T) {
 	dbErr := errors.New("query error")
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)
-	repo.On("GetMessages", ctx, roomID, mock.Anything, 11).Return(nil, dbErr)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, 11).Return(nil, dbErr)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, 10)
 
@@ -214,7 +214,7 @@ func TestGetMessages_HasMore_True(t *testing.T) {
 	}
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)
-	repo.On("GetMessages", ctx, roomID, mock.Anything, limit+1).Return(messages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, limit+1).Return(messages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, limit)
 
@@ -240,7 +240,7 @@ func TestGetMessages_HasMore_False(t *testing.T) {
 	}
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)
-	repo.On("GetMessages", ctx, roomID, mock.Anything, limit+1).Return(messages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, mock.Anything, limit+1).Return(messages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, nil, limit)
 
@@ -265,7 +265,7 @@ func TestGetMessages_WithBefore(t *testing.T) {
 	}
 
 	roomRepo.On("GetRoom", ctx, roomID).Return(newRoom(false, false), nil)
-	repo.On("GetMessages", ctx, roomID, &before, limit+1).Return(expectedMessages, nil)
+	repo.On("GetMessages", ctx, roomID, userID, &before, limit+1).Return(expectedMessages, nil)
 
 	result, err := svc.GetMessages(ctx, roomID, userID, &before, limit)
 
@@ -273,5 +273,5 @@ func TestGetMessages_WithBefore(t *testing.T) {
 	assert.Equal(t, expectedMessages, result.Messages)
 	assert.False(t, result.HasMore)
 	assert.Nil(t, result.NextCursor)
-	repo.AssertCalled(t, "GetMessages", ctx, roomID, &before, limit+1)
+	repo.AssertCalled(t, "GetMessages", ctx, roomID, userID, &before, limit+1)
 }
