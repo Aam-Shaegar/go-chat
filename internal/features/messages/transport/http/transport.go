@@ -2,6 +2,7 @@ package messages_transport_http
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +25,8 @@ type MessagesHandler struct {
 
 type MessagesService interface {
 	GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) (messages_service.GetMessagesResult, error)
+	EditMessage(ctx context.Context, roomID, userID, messageID, content string, updatedAt time.Time) (domain_models.Message, error)
+	DeleteMessage(ctx context.Context, roomID, userID, messageID string, deletedAt time.Time) (domain_models.Message, error)
 }
 
 func NewMessagesHandler(service MessagesService) *MessagesHandler {
@@ -36,6 +39,18 @@ func (h *MessagesHandler) Routes(auth core_http_middleware.Middleware) []core_ht
 			Method:     http.MethodGet,
 			Path:       "/rooms/{roomId}/messages",
 			Handler:    h.GetMessages,
+			Middleware: []core_http_middleware.Middleware{auth},
+		},
+		{
+			Method:     http.MethodPatch,
+			Path:       "/rooms/{roomId}/messages/{messageId}",
+			Handler:    h.EditMessage,
+			Middleware: []core_http_middleware.Middleware{auth},
+		},
+		{
+			Method:     http.MethodDelete,
+			Path:       "/rooms/{roomId}/messages/{messageId}",
+			Handler:    h.DeleteMessage,
 			Middleware: []core_http_middleware.Middleware{auth},
 		},
 	}
@@ -109,6 +124,101 @@ func (h *MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		NextCursor: nextCursor,
 		HasMore:    result.HasMore,
 	}, http.StatusOK)
+}
+
+func (h *MessagesHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	if roomID == "" {
+		resp.ErrorResponse(
+			fmt.Errorf("roomId required: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	messageID := r.PathValue("messageId")
+	if messageID == "" {
+		resp.ErrorResponse(
+			fmt.Errorf("messageId required: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		resp.ErrorResponse(
+			fmt.Errorf("invalid request body: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	if req.Content == "" {
+		resp.ErrorResponse(
+			fmt.Errorf("content is required: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	msg, err := h.service.EditMessage(ctx, roomID, userID, messageID, req.Content, time.Now())
+	if err != nil {
+		resp.ErrorResponse(err, "failed to edit message")
+		return
+	}
+
+	resp.JSONResponse(msg, http.StatusOK)
+}
+
+func (h *MessagesHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	if roomID == "" {
+		resp.ErrorResponse(
+			fmt.Errorf("roomId required: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	messageID := r.PathValue("messageId")
+	if messageID == "" {
+		resp.ErrorResponse(
+			fmt.Errorf("messageId required: %w", core_error.ErrInvalidArgument),
+			"bad request",
+		)
+		return
+	}
+
+	msg, err := h.service.DeleteMessage(ctx, roomID, userID, messageID, time.Now())
+	if err != nil {
+		resp.ErrorResponse(err, "failed to delete message")
+		return
+	}
+
+	resp.JSONResponse(msg, http.StatusOK)
 }
 
 func parseMessageCursor(raw string) (*domain_models.MessageCursor, error) {

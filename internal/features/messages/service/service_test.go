@@ -28,6 +28,22 @@ func (m *MockRepository) GetMessages(ctx context.Context, roomID, userID string,
 	return args.Get(0).([]domain_models.Message), args.Error(1)
 }
 
+func (m *MockRepository) EditMessage(ctx context.Context, roomID, userID, messageID, content string, updatedAt time.Time) (domain_models.Message, error) {
+	args := m.Called(ctx, roomID, userID, messageID, content, updatedAt)
+	if args.Get(0) == nil {
+		return domain_models.Message{}, args.Error(1)
+	}
+	return args.Get(0).(domain_models.Message), args.Error(1)
+}
+
+func (m *MockRepository) DeleteMessage(ctx context.Context, roomID, userID, messageID string, deletedAt time.Time) (domain_models.Message, error) {
+	args := m.Called(ctx, roomID, userID, messageID, deletedAt)
+	if args.Get(0) == nil {
+		return domain_models.Message{}, args.Error(1)
+	}
+	return args.Get(0).(domain_models.Message), args.Error(1)
+}
+
 type MockRoomRepository struct {
 	mock.Mock
 }

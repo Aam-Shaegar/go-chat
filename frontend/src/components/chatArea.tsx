@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef, createContext } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { useChatStore, type RoomConnectionState } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
@@ -6,11 +6,26 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
-import { roomsApi } from '../api/rooms'
+import { roomsApi, dmApi, readsApi } from '../api/rooms'
 import type { Message, RoomInvite, MessageReaction } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
+}
+
+interface ComposerContextValue {
+  setInput: (value: string) => void
+  composerRef: React.RefObject<HTMLTextAreaElement>
+  editingMessage: Message | null
+  setEditingMessage: (msg: Message | null) => void
+}
+
+const ComposerContext = createContext<ComposerContextValue | null>(null)
+
+function useChatArea() {
+  const ctx = useContext(ComposerContext)
+  if (!ctx) throw new Error('useChatArea must be used within ChatArea')
+  return ctx
 }
 
 export function ChatArea({ onBack }: ChatAreaProps) {
@@ -19,6 +34,7 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const lastRenderedMessageId = useRef<string | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
 
@@ -109,12 +125,26 @@ export function ChatArea({ onBack }: ChatAreaProps) {
       return
     }
 
-    if (sendMessage(content)) {
+    if (editingMessage) {
+      roomsApi.editMessage(activeRoomId, editingMessage.id, content)
+        .then(() => {
+          storeUpdateMessage(activeRoomId, editingMessage.id, content, new Date().toISOString())
+          wsUpdateMessage?.(editingMessage.id, content)
+        })
+        .catch((err) => {
+          console.error('Failed to edit message:', err)
+        })
       setInput('')
+      setEditingMessage(null)
       setComposerError('')
-      if (composerRef.current) {
-        composerRef.current.style.height = '44px'
+    } else {
+      if (sendMessage(content)) {
+        setInput('')
+        setComposerError('')
       }
+    }
+    if (composerRef.current) {
+      composerRef.current.style.height = '44px'
     }
   }
 
@@ -137,164 +167,173 @@ export function ChatArea({ onBack }: ChatAreaProps) {
 
   if (!activeRoomId) return null
 
+  const composerContextValue: ComposerContextValue = {
+    setInput,
+    composerRef,
+    editingMessage,
+    setEditingMessage,
+  }
+
   return (
-    <section className="relative flex h-full min-w-0 flex-col bg-[#eef3f8] text-slate-950">
-      <header className="flex min-h-[64px] items-center gap-3 border-b border-slate-200 bg-white px-3 shadow-sm md:px-5">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to chats"
-          className="grid h-10 w-10 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
-        >
-          <Icon name="back" className="h-5 w-5" />
-        </button>
-
-        <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
-              {room?.is_dm ? roomTitle : `#${roomTitle}`}
-            </h2>
-            {room?.is_private && !room.is_dm && (
-              <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            )}
-          </div>
-          <p className="truncate text-xs text-slate-500">
-            {otherTyping.length > 0
-              ? `${otherTyping.join(', ')} typing`
-              : room?.is_dm
-                ? otherUserOnline
-                  ? 'online'
-                  : otherUserLastSeen
-                    ? `last seen ${formatActivity(otherUserLastSeen)}`
-                    : 'offline'
-                : `${onlineCount} online`}
-          </p>
-        </div>
-
-        {canInvite && (
+    <ComposerContext.Provider value={composerContextValue}>
+      <section className="relative flex h-full min-w-0 flex-col bg-[#eef3f8] text-slate-950">
+        <header className="flex min-h-[64px] items-center gap-3 border-b border-slate-200 bg-white px-3 shadow-sm md:px-5">
           <button
             type="button"
-            onClick={() => setShowInviteModal(true)}
-            aria-label="Create invite"
-            title="Create invite"
-            className="grid h-10 w-10 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-[#229ed9]"
+            onClick={onBack}
+            aria-label="Back to chats"
+            className="grid h-10 w-10 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
           >
-            <Icon name="link" className="h-5 w-5" />
+            <Icon name="back" className="h-5 w-5" />
           </button>
-        )}
-      </header>
 
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        role="log"
-        aria-label="Messages"
-        aria-live="polite"
-        aria-relevant="additions text"
-        aria-busy={loading}
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-8"
-      >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
-          {hasMore && (
+          <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
+                {room?.is_dm ? roomTitle : `#${roomTitle}`}
+              </h2>
+              {room?.is_private && !room.is_dm && (
+                <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              )}
+            </div>
+            <p className="truncate text-xs text-slate-500">
+              {otherTyping.length > 0
+                ? `${otherTyping.join(', ')} typing`
+                : room?.is_dm
+                  ? otherUserOnline
+                    ? 'online'
+                    : otherUserLastSeen
+                      ? `last seen ${formatActivity(otherUserLastSeen)}`
+                      : 'offline'
+                  : `${onlineCount} online`}
+            </p>
+          </div>
+
+          {canInvite && (
             <button
               type="button"
-              onClick={handleLoadMore}
-              disabled={loading}
-              className="mx-auto rounded-full bg-white px-4 py-2 text-xs font-medium text-[#229ed9] shadow-sm transition hover:bg-slate-50 disabled:text-slate-400"
+              onClick={() => setShowInviteModal(true)}
+              aria-label="Create invite"
+              title="Create invite"
+              className="grid h-10 w-10 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-[#229ed9]"
             >
-              {loading ? 'Loading...' : 'Load earlier messages'}
+              <Icon name="link" className="h-5 w-5" />
             </button>
           )}
+        </header>
 
-          {error && (
-            <div className="mx-auto rounded-full bg-red-50 px-4 py-2 text-xs font-medium text-red-600">
-              {error}
-            </div>
-          )}
-
-          {loading && roomMessages.length === 0 && (
-            <div className="py-10 text-center text-sm text-slate-500">Loading messages...</div>
-          )}
-
-          {!loading && roomMessages.length === 0 && (
-            <div className="py-10 text-center text-sm text-slate-500">No messages yet</div>
-          )}
-
-          {roomMessages.map((message, index) => {
-            const previous = roomMessages[index - 1]
-            const showDate = !previous || !sameDay(previous.created_at, message.created_at)
-            const showUsername = !previous || previous.user_id !== message.user_id || showDate
-
-            return (
-              <Fragment key={message.id}>
-                {showDate && <DateDivider value={message.created_at} />}
-                <MessageBubble
-                  message={message}
-                  isMine={message.user_id === user?.id}
-                  showUsername={showUsername}
-                />
-              </Fragment>
-            )
-          })}
-
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {!isAtBottom && (
-        <button
-          type="button"
-          onClick={() => {
-            scrollToBottom('smooth')
-            markActiveRoomRead()
-          }}
-          aria-label="Scroll to latest messages"
-          className="absolute bottom-20 right-4 grid h-11 w-11 place-items-center rounded-full bg-white text-[#229ed9] shadow-lg shadow-slate-300/60 transition hover:bg-slate-50 md:right-8"
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          role="log"
+          aria-label="Messages"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-busy={loading}
+          className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-8"
         >
-          <Icon name="down" className="h-5 w-5" />
-        </button>
-      )}
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+            {hasMore && (
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loading}
+                className="mx-auto rounded-full bg-white px-4 py-2 text-xs font-medium text-[#229ed9] shadow-sm transition hover:bg-slate-50 disabled:text-slate-400"
+              >
+                {loading ? 'Loading...' : 'Load earlier messages'}
+              </button>
+            )}
 
-      <form
-        onSubmit={handleSend}
-        className="border-t border-slate-200 bg-white px-3 py-3 md:px-5"
-      >
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <label className="sr-only" htmlFor="message-composer">Message</label>
-          <textarea
-            id="message-composer"
-            ref={composerRef}
-            value={input}
-            onChange={(event) => {
-              handleComposerChange(event.target.value)
-            }}
-            onKeyDown={handleComposerKeyDown}
-            placeholder={`Message ${room?.is_dm ? roomTitle : `#${roomTitle}`}`}
-            rows={1}
-            className="min-h-11 max-h-36 min-w-0 flex-1 resize-none rounded-3xl border border-transparent bg-slate-100 px-4 py-3 text-sm leading-5 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9] focus:bg-white"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || !canSend}
-            aria-label="Send message"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#229ed9] text-white shadow-sm transition hover:bg-[#168ac0] disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            <Icon name="send" className="h-5 w-5" />
-          </button>
+            {error && (
+              <div className="mx-auto rounded-full bg-red-50 px-4 py-2 text-xs font-medium text-red-600">
+                {error}
+              </div>
+            )}
+
+            {loading && roomMessages.length === 0 && (
+              <div className="py-10 text-center text-sm text-slate-500">Loading messages...</div>
+            )}
+
+            {!loading && roomMessages.length === 0 && (
+              <div className="py-10 text-center text-sm text-slate-500">No messages yet</div>
+            )}
+
+            {roomMessages.map((message, index) => {
+              const previous = roomMessages[index - 1]
+              const showDate = !previous || !sameDay(previous.created_at, message.created_at)
+              const showUsername = !previous || previous.user_id !== message.user_id || showDate
+
+              return (
+                <Fragment key={message.id}>
+                  {showDate && <DateDivider value={message.created_at} />}
+                  <MessageBubble
+                    message={message}
+                    isMine={message.user_id === user?.id}
+                    showUsername={showUsername}
+                  />
+                </Fragment>
+              )
+            })}
+
+            <div ref={bottomRef} />
+          </div>
         </div>
-        {(composerError || !canSend) && (
-          <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-slate-500">
-            {composerError || !canSend ? 'Connecting...' : ''}
-          </p>
-        )}
-      </form>
 
-      {showInviteModal && activeRoomId && (
-        <InviteModal roomId={activeRoomId} onClose={() => setShowInviteModal(false)} />
-      )}
-    </section>
+        {!isAtBottom && (
+          <button
+            type="button"
+            onClick={() => {
+              scrollToBottom('smooth')
+              markActiveRoomRead()
+            }}
+            aria-label="Scroll to latest messages"
+            className="absolute bottom-20 right-4 grid h-11 w-11 place-items-center rounded-full bg-white text-[#229ed9] shadow-lg shadow-slate-300/60 transition hover:bg-slate-50 md:right-8"
+          >
+            <Icon name="down" className="h-5 w-5" />
+          </button>
+        )}
+
+        <form
+          onSubmit={handleSend}
+          className="border-t border-slate-200 bg-white px-3 py-3 md:px-5"
+        >
+          <div className="mx-auto flex max-w-3xl items-end gap-2">
+            <label className="sr-only" htmlFor="message-composer">Message</label>
+            <textarea
+              id="message-composer"
+              ref={composerRef}
+              value={input}
+              onChange={(event) => {
+                handleComposerChange(event.target.value)
+              }}
+              onKeyDown={handleComposerKeyDown}
+              placeholder={`Message ${room?.is_dm ? roomTitle : `#${roomTitle}`}`}
+              rows={1}
+              className="min-h-11 max-h-36 min-w-0 flex-1 resize-none rounded-3xl border border-transparent bg-slate-100 px-4 py-3 text-sm leading-5 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9] focus:bg-white"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || !canSend}
+              aria-label={editingMessage ? 'Save changes' : 'Send message'}
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#229ed9] text-white shadow-sm transition hover:bg-[#168ac0] disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <Icon name={editingMessage ? 'check' : 'send'} className="h-5 w-5" />
+            </button>
+          </div>
+          {(composerError || !canSend) && (
+            <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-slate-500">
+              {composerError || !canSend ? 'Connecting...' : ''}
+            </p>
+          )}
+        </form>
+
+        {showInviteModal && activeRoomId && (
+          <InviteModal roomId={activeRoomId} onClose={() => setShowInviteModal(false)} />
+        )}
+      </section>
+    </ComposerContext.Provider>
   )
 }
 
@@ -306,8 +345,10 @@ function MessageBubble({ message, isMine, showUsername }: {
   const edited = message.updated_at !== message.created_at
   const isDeleted = message.deleted_at != null
   const { user } = useAuthStore()
-  const { addReaction, removeReaction } = useWebSocket(message.room_id)
+  const { addReaction, removeReaction, updateMessage: wsUpdateMessage, deleteMessage: wsDeleteMessage } = useWebSocket(message.room_id)
+  const { updateMessage: storeUpdateMessage, deleteMessage: storeDeleteMessage } = useChatStore()
   const [showReactionPicker, setShowReactionPicker] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
   const reactions = message.reactions ?? []
@@ -333,6 +374,30 @@ function MessageBubble({ message, isMine, showUsername }: {
     }
   }
 
+  const handleEdit = () => {
+    if (isDeleted) return
+    const { setInput, composerRef, setEditingMessage } = useChatArea()
+    setInput(message.content)
+    setEditingMessage(message)
+    composerRef.current?.focus()
+  }
+
+  const handleDelete = () => {
+    if (isDeleted) return
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    try {
+      await roomsApi.deleteMessage(message.room_id, message.id)
+      storeDeleteMessage(message.room_id, message.id)
+      wsDeleteMessage?.(message.id)
+    } catch (error) {
+      console.error('Failed to delete message:', error)
+    }
+    setShowDeleteConfirm(false)
+  }
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
@@ -342,6 +407,38 @@ function MessageBubble({ message, isMine, showUsername }: {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  if (isDeleted) {
+    return (
+      <div data-message-id={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex max-w-[86%] items-end gap-2 md:max-w-[72%] ${isMine ? 'flex-row-reverse' : ''}`}>
+          {!isMine && showUsername ? (
+            <ConversationAvatar name={message.username} compact />
+          ) : (
+            !isMine && <div className="h-8 w-8 shrink-0" />
+          )}
+
+          <div
+            className={`relative rounded-2xl px-3.5 py-2 text-sm leading-5 shadow-sm ${
+              isMine
+                ? 'rounded-br-md bg-[#dff6d5] text-slate-950'
+                : 'rounded-bl-md bg-white text-slate-950'
+            }`}
+          >
+            {showUsername && !isMine && (
+              <p className="mb-0.5 text-xs font-semibold text-[#229ed9]">{message.username}</p>
+            )}
+            <p className="whitespace-pre-wrap break-words text-slate-500 italic" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+              This message was deleted
+            </p>
+            <div className="mt-1 flex justify-end gap-1 text-[11px] leading-none text-slate-400">
+              <span>{formatTime(message.created_at)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div data-message-id={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -375,8 +472,28 @@ function MessageBubble({ message, isMine, showUsername }: {
           )}
 
           <div className="mt-1 flex justify-end gap-1 text-[11px] leading-none text-slate-400">
-            {edited && <span>edited</span>}
+            {edited && <span>edited {formatTime(message.updated_at)}</span>}
             <span>{formatTime(message.created_at)}</span>
+            {isMine && (
+              <div className="flex items-center gap-0.5 ml-2">
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  aria-label="Edit message"
+                  className="p-0.5 rounded hover:bg-slate-200 transition"
+                >
+                  <Icon name="edit" className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  aria-label="Delete message"
+                  className="p-0.5 rounded hover:bg-slate-200 transition text-red-500"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {!isDeleted && showReactionPicker && (
@@ -390,6 +507,9 @@ function MessageBubble({ message, isMine, showUsername }: {
         </div>
       </div>
 
+      {showDeleteConfirm && (
+        <DeleteConfirmModal onConfirm={confirmDelete} onCancel={() => setShowDeleteConfirm(false)} />
+      )}
     </div>
   )
 }
@@ -552,6 +672,46 @@ const ReactionPicker = forwardRef<
 
 ReactionPicker.displayName = 'ReactionPicker'
 
+function DeleteConfirmModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-950">Delete message</h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <p className="text-center text-sm text-slate-700">Are you sure you want to delete this message?</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 h-10 rounded-full border border-slate-300 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="flex-1 h-10 rounded-full bg-red-600 text-sm font-medium text-white transition hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void }) {
   const [invite, setInvite] = useState<RoomInvite | null>(null)
   const [loading, setLoading] = useState(true)
@@ -652,7 +812,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -663,6 +823,9 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     close: <path d="M18 6L6 18M6 6l12 12" />,
     down: <path d="M12 5v14M19 12l-7 7-7-7" />,
     smile: <path d="M22 11c0 6.1-4.9 11-11 11S0 17.1 0 11s4.9-11 11-11 11 4.9 11 11zM8 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM16 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM21 11a10 10 0 0 0-6.3-9.3.9.9 0 0 0-1.4 0A10 10 0 0 0 3 11c0 2.5 1.2 4.7 3 6M11 17a4 4 0 0 1 0-8" />,
+    edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />,
+    trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
+    check: <path d="M20 6 9 17l-5-5" />,
   }
 
   return (
@@ -700,6 +863,10 @@ function formatTime(value: string) {
 
 function formatDay(value: string) {
   return new Date(value).toLocaleDateString([], { day: 'numeric', month: 'long' })
+}
+
+function formatActivity(value: string) {
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function sameDay(left: string, right: string) {

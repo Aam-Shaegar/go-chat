@@ -2,6 +2,7 @@ package messages_service
 
 import (
 	"context"
+	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 )
@@ -17,6 +18,8 @@ func NewMessagesService(repo Repository, roomRepo RoomRepository) *MessagesServi
 
 type Repository interface {
 	GetMessages(ctx context.Context, roomID, userID string, before *domain_models.MessageCursor, limit int) ([]domain_models.Message, error)
+	EditMessage(ctx context.Context, roomID, userID, messageID, content string, updatedAt time.Time) (domain_models.Message, error)
+	DeleteMessage(ctx context.Context, roomID, userID, messageID string, deletedAt time.Time) (domain_models.Message, error)
 }
 
 type RoomRepository interface {

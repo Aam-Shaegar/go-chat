@@ -28,5 +28,15 @@ export function useWebSocket(roomId: string | null) {
     return roomSocketHub.send(roomId, 'remove_reaction', { message_id: messageId, emoji })
   }, [roomId])
 
-  return { sendMessage, sendTyping, addReaction, removeReaction, connectionState }
+  const updateMessage = useCallback((messageId: string, content: string) => {
+    if (!roomId) return false
+    return roomSocketHub.send(roomId, 'edit_message', { message_id: messageId, content })
+  }, [roomId])
+
+  const deleteMessage = useCallback((messageId: string) => {
+    if (!roomId) return false
+    return roomSocketHub.send(roomId, 'delete_message', { message_id: messageId })
+  }, [roomId])
+
+  return { sendMessage, sendTyping, addReaction, removeReaction, updateMessage, deleteMessage, connectionState }
 }

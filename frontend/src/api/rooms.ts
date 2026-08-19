@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { Room, RoomMember, MessagesResponse, User, RoomInvite } from '../types'
+import type { Room, RoomMember, MessagesResponse, User, RoomInvite, Message } from '../types'
 
 export const roomsApi = {
   getPublic: (limit = 20, offset = 0) =>
@@ -27,6 +27,12 @@ export const roomsApi = {
     client.get<MessagesResponse>(`/rooms/${id}/messages`, {
       params: { before, limit },
     }),
+
+  editMessage: (roomId: string, messageId: string, content: string) =>
+    client.patch<Message>(`/rooms/${roomId}/messages/${messageId}`, { content }),
+
+  deleteMessage: (roomId: string, messageId: string) =>
+    client.delete<Message>(`/rooms/${roomId}/messages/${messageId}`),
 
   markRead: (id: string) =>
     client.post(`/rooms/${id}/read`),
