@@ -29,7 +29,7 @@ function useChatArea() {
 }
 
 export function ChatArea({ onBack }: ChatAreaProps) {
-  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline } = useChatStore()
+  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage } = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
