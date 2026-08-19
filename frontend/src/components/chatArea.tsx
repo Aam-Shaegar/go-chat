@@ -166,7 +166,7 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
-    event.currentTarget.form?.requestSubmit()
+    handleSend(event as unknown as FormEvent)
   }
 
   if (!activeRoomId) return null
