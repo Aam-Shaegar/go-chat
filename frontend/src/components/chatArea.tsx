@@ -58,7 +58,7 @@ export function ChatArea({ onBack }: ChatAreaProps) {
     onInitialLoad,
   } = useChatScroll()
 
-  const { sendMessage, sendTyping, connectionState } = useWebSocket(activeRoomId)
+  const { sendMessage, sendTyping, connectionState, updateMessage: wsUpdateMessage } = useWebSocket(activeRoomId)
   const { onInputChange, cleanup } = useTyping(activeRoomId, sendTyping)
   const { loading, hasMore, error, loadMore } = useChatLoader(activeRoomId, onInitialLoad)
 
