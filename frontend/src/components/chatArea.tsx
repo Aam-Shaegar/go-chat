@@ -126,14 +126,18 @@ export function ChatArea({ onBack }: ChatAreaProps) {
     }
 
     if (editingMessage) {
+      // Optimistic update immediately
+      const now = new Date().toISOString()
+      storeUpdateMessage(activeRoomId, editingMessage.id, content, now)
+      wsUpdateMessage?.(editingMessage.id, content)
+
+      // Sync with server
       roomsApi.editMessage(activeRoomId, editingMessage.id, content)
-        .then(() => {
-          storeUpdateMessage(activeRoomId, editingMessage.id, content, new Date().toISOString())
-          wsUpdateMessage?.(editingMessage.id, content)
-        })
         .catch((err) => {
           console.error('Failed to edit message:', err)
+          // Could add rollback logic here if needed
         })
+
       setInput('')
       setEditingMessage(null)
       setComposerError('')
