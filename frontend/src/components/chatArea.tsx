@@ -347,6 +347,7 @@ function MessageBubble({ message, isMine, showUsername }: {
   const { user } = useAuthStore()
   const { addReaction, removeReaction, updateMessage: wsUpdateMessage, deleteMessage: wsDeleteMessage } = useWebSocket(message.room_id)
   const { updateMessage: storeUpdateMessage, deleteMessage: storeDeleteMessage } = useChatStore()
+  const { setInput, composerRef, setEditingMessage } = useChatArea()
   const [showReactionPicker, setShowReactionPicker] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -376,7 +377,6 @@ function MessageBubble({ message, isMine, showUsername }: {
 
   const handleEdit = () => {
     if (isDeleted) return
-    const { setInput, composerRef, setEditingMessage } = useChatArea()
     setInput(message.content)
     setEditingMessage(message)
     composerRef.current?.focus()
