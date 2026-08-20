@@ -7,7 +7,7 @@ import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
 import { roomsApi, dmApi, readsApi } from '../api/rooms'
-import type { Message, RoomInvite, MessageReaction } from '../types'
+import type { Message, RoomInvite, MessageReaction, RoomMember } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
@@ -34,6 +34,9 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
+  const [members, setMembers] = useState<RoomMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const lastRenderedMessageId = useRef<string | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -92,6 +95,21 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const handleScroll = useCallback(() => {
     if (trackScroll()) markActiveRoomRead()
   }, [trackScroll, markActiveRoomRead])
+
+  const openMembersModal = useCallback(async () => {
+    if (!activeRoomId) return
+    setMembersLoading(true)
+    try {
+      const { data } = await roomsApi.getMembers(activeRoomId)
+      setMembers(data ?? [])
+    } catch (error) {
+      console.error('Failed to load members:', error)
+      setMembers([])
+    } finally {
+      setMembersLoading(false)
+      setShowMembersModal(true)
+    }
+  }, [activeRoomId])
 
   useEffect(() => {
     if (!lastMessage) return
@@ -191,29 +209,35 @@ export function ChatArea({ onBack }: ChatAreaProps) {
             <Icon name="back" className="h-5 w-5" />
           </button>
 
-          <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
-                {room?.is_dm ? roomTitle : `#${roomTitle}`}
-              </h2>
-              {room?.is_private && !room.is_dm && (
-                <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-              )}
+          <button
+            type="button"
+            onClick={openMembersModal}
+            aria-label="View members"
+            className="flex items-center gap-3 min-w-0 flex-1 p-1 rounded-xl transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#229ed9] focus:ring-offset-2"
+          >
+            <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
+                  {room?.is_dm ? roomTitle : `#${roomTitle}`}
+                </h2>
+                {room?.is_private && !room.is_dm && (
+                  <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                )}
+              </div>
+              <p className="truncate text-xs text-slate-500">
+                {otherTyping.length > 0
+                  ? `${otherTyping.join(', ')} typing`
+                  : room?.is_dm
+                    ? otherUserOnline
+                      ? 'online'
+                      : otherUserLastSeen
+                        ? `last seen ${formatActivity(otherUserLastSeen)}`
+                        : 'offline'
+                    : `${onlineCount} online`}
+              </p>
             </div>
-            <p className="truncate text-xs text-slate-500">
-              {otherTyping.length > 0
-                ? `${otherTyping.join(', ')} typing`
-                : room?.is_dm
-                  ? otherUserOnline
-                    ? 'online'
-                    : otherUserLastSeen
-                      ? `last seen ${formatActivity(otherUserLastSeen)}`
-                      : 'offline'
-                  : `${onlineCount} online`}
-            </p>
-          </div>
+          </button>
 
           {canInvite && (
             <button
@@ -336,6 +360,14 @@ export function ChatArea({ onBack }: ChatAreaProps) {
         {showInviteModal && activeRoomId && (
           <InviteModal roomId={activeRoomId} onClose={() => setShowInviteModal(false)} />
         )}
+
+        <MembersModal
+          isOpen={showMembersModal}
+          onClose={() => setShowMembersModal(false)}
+          members={members}
+          loading={membersLoading}
+          isDM={Boolean(room?.is_dm)}
+        />
       </section>
     </ComposerContext.Provider>
   )
@@ -782,6 +814,86 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
           ) : (
             <p className="text-center text-sm text-red-600">Could not create invite</p>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MembersModal({ isOpen, onClose, members, loading, isDM }: {
+  isOpen: boolean
+  onClose: () => void
+  members: RoomMember[]
+  loading: boolean
+  isDM: boolean
+}) {
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (!isOpen) return
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, handleKeyDown])
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner': return 'Owner'
+      case 'admin': return 'Admin'
+      default: return 'Member'
+    }
+  }
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'owner': return 'bg-amber-100 text-amber-700'
+      case 'admin': return 'bg-blue-100 text-blue-700'
+      default: return 'bg-slate-100 text-slate-700'
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
+          <h3 className="text-sm font-semibold text-slate-950">{isDM ? 'Participants' : 'Members'}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {loading ? (
+            <div className="py-10 text-center text-sm text-slate-500">Loading members...</div>
+          ) : members.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-500">No members</div>
+          ) : (
+            <ul className="space-y-2" role="list">
+              {members.map((member) => (
+                <li key={member.user_id} className="flex items-center gap-3">
+                  <ConversationAvatar name={member.username} isDM={isDM} compact />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                      {getRoleLabel(member.role)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="border-t border-slate-100 px-5 py-3 sticky bottom-0 bg-white z-10 rounded-b-2xl">
+          <p className="text-center text-xs text-slate-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
     </div>
