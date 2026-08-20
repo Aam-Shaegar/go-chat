@@ -30,6 +30,8 @@ type Repository interface {
 	AddMember(ctx context.Context, roomID, userID string, role domain_models.MemberRole) error
 	RemoveMember(ctx context.Context, roomID, userID string) error
 	UpdateMemberRole(ctx context.Context, roomID, userID string, role domain_models.MemberRole) error
+	MuteMember(ctx context.Context, roomID, userID string, mutedUntil time.Time) error
+	UnmuteMember(ctx context.Context, roomID, userID string) error
 
 	// Invites
 	CreateInvite(ctx context.Context, invite domain_models.RoomInvite) (domain_models.RoomInvite, error)

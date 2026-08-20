@@ -29,6 +29,7 @@ export interface RoomMember {
   username: string
   role: 'owner' | 'admin' | 'member'
   joined_at: string
+  muted_until?: string
 }
 
 export interface Message {

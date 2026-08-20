@@ -3,6 +3,7 @@ package rooms_repository_postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
@@ -26,14 +27,14 @@ func (r *RoomsRepository) GetMember(ctx context.Context, roomID, userID string) 
 	defer cancel()
 
 	query := `
-		SELECT rm.room_id, rm.user_id, u.username, rm.role, rm.joined_at
+		SELECT rm.room_id, rm.user_id, u.username, rm.role, rm.joined_at, rm.muted_until
 		FROM gochat.room_members rm
 		JOIN gochat.users u ON u.id=rm.user_id
 		WHERE rm.room_id=$1 AND rm.user_id=$2;
 	`
 	row := r.pool.QueryRow(ctx, query, roomID, userID)
 	var m memberModel
-	err := row.Scan(&m.RoomID, &m.UserID, &m.Username, &m.Role, &m.JoinedAt)
+	err := row.Scan(&m.RoomID, &m.UserID, &m.Username, &m.Role, &m.JoinedAt, &m.MutedUntil)
 	if err != nil {
 		if err == core_postgres_pool.ErrNoRows {
 			return domain_models.RoomMember{}, fmt.Errorf("member not found: %w", core_postgres_pool.ErrNoRows)
@@ -48,7 +49,7 @@ func (r *RoomsRepository) GetMembers(ctx context.Context, roomID string) ([]doma
 	defer cancel()
 
 	query := `
-		SELECT rm.room_id, rm.user_id, u.username, rm.role, rm.joined_at
+		SELECT rm.room_id, rm.user_id, u.username, rm.role, rm.joined_at, rm.muted_until
 		FROM gochat.room_members rm
 		JOIN gochat.users u ON u.id=rm.user_id
 		WHERE rm.room_id=$1
@@ -63,7 +64,7 @@ func (r *RoomsRepository) GetMembers(ctx context.Context, roomID string) ([]doma
 	var members []domain_models.RoomMember
 	for rows.Next() {
 		var m memberModel
-		if err := rows.Scan(&m.RoomID, &m.UserID, &m.Username, &m.Role, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.RoomID, &m.UserID, &m.Username, &m.Role, &m.JoinedAt, &m.MutedUntil); err != nil {
 			return nil, fmt.Errorf("scan member row: %w", err)
 		}
 		members = append(members, memberToDomain(m))
@@ -116,6 +117,36 @@ func (r *RoomsRepository) UpdateMemberRole(ctx context.Context, roomID, userID s
 	tag, err := r.pool.Exec(ctx, query, string(role), roomID, userID)
 	if err != nil {
 		return fmt.Errorf("update member role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("member not found: %w", core_postgres_pool.ErrNoRows)
+	}
+	return nil
+}
+
+func (r *RoomsRepository) MuteMember(ctx context.Context, roomID, userID string, mutedUntil time.Time) error {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	query := `UPDATE gochat.room_members SET muted_until=$1 WHERE room_id=$2 AND user_id=$3;`
+	tag, err := r.pool.Exec(ctx, query, mutedUntil, roomID, userID)
+	if err != nil {
+		return fmt.Errorf("mute member: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("member not found: %w", core_postgres_pool.ErrNoRows)
+	}
+	return nil
+}
+
+func (r *RoomsRepository) UnmuteMember(ctx context.Context, roomID, userID string) error {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	query := `UPDATE gochat.room_members SET muted_until=NULL WHERE room_id=$1 AND user_id=$2;`
+	tag, err := r.pool.Exec(ctx, query, roomID, userID)
+	if err != nil {
+		return fmt.Errorf("unmute member: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("member not found: %w", core_postgres_pool.ErrNoRows)

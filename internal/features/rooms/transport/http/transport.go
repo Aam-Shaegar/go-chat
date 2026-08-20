@@ -19,12 +19,14 @@ type RoomsService interface {
 	GetRoom(ctx context.Context, roomID, userID string) (domain_models.Room, error)
 	GetPublicRooms(ctx context.Context, limit, offset int) ([]domain_models.Room, error)
 	GetUserRooms(ctx context.Context, userID string) ([]domain_models.Room, error)
-	DeleteRoom(ctx context.Context, roomID, userID string) error
+	DeleteRoom(ctx context.Context, roomID, ownerID string) error
 
 	JoinPublicRoom(ctx context.Context, roomID, userID string) error
 	LeaveRoom(ctx context.Context, roomID, userID string) error
 	KickMember(ctx context.Context, roomID, requesterID, targetUserID string) error
 	UpdateMemberRole(ctx context.Context, roomID, requesterID, targetUserID string, role domain_models.MemberRole) error
+	MuteMember(ctx context.Context, roomID, requesterID, targetUserID string, mutedUntil time.Time) error
+	UnmuteMember(ctx context.Context, roomID, requesterID, targetUserID string) error
 	GetMembers(ctx context.Context, roomID, userID string) ([]domain_models.RoomMember, error)
 
 	CreateInvite(ctx context.Context, roomID, userID string, maxUses int, ttl *time.Duration) (domain_models.RoomInvite, error)
@@ -52,6 +54,8 @@ func (h *RoomsHandler) Routes(auth core_http_middleware.Middleware) []core_http_
 		{Method: http.MethodGet, Path: "/rooms/{roomId}/members", Handler: h.GetMembers, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}", Handler: h.KickMember, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/role", Handler: h.UpdateMemberRole, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.MuteMember, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.UnmuteMember, Middleware: []core_http_middleware.Middleware{auth}},
 
 		// Invites
 		{Method: http.MethodPost, Path: "/rooms/{roomId}/invites", Handler: h.CreateInvite, Middleware: []core_http_middleware.Middleware{auth}},

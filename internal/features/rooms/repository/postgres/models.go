@@ -17,11 +17,12 @@ type roomModel struct {
 }
 
 type memberModel struct {
-	RoomID   string
-	UserID   string
-	Username string
-	Role     string
-	JoinedAt time.Time
+	RoomID     string
+	UserID     string
+	Username   string
+	Role       string
+	JoinedAt   time.Time
+	MutedUntil *time.Time
 }
 
 type inviteModel struct {
@@ -49,7 +50,7 @@ func memberToDomain(m memberModel) domain_models.RoomMember {
 	return domain_models.NewRoomMember(
 		m.RoomID, m.UserID, m.Username,
 		domain_models.MemberRole(m.Role),
-		m.JoinedAt,
+		m.JoinedAt, m.MutedUntil,
 	)
 }
 

@@ -30,6 +30,10 @@ type updateRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=admin member"`
 }
 
+type muteMemberRequest struct {
+	MutedUntil string `json:"muted_until" validate:"required"`
+}
+
 // Handlers
 
 func (h *RoomsHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
@@ -258,6 +262,60 @@ func (h *RoomsHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) 
 
 	if err := h.service.UpdateMemberRole(ctx, roomID, userID, targetID, domain_models.MemberRole(req.Role)); err != nil {
 		resp.ErrorResponse(err, "failed to update role")
+		return
+	}
+	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	targetID := r.PathValue("userId")
+
+	var req muteMemberRequest
+	if err := core_http_request.DecodeAndValidateRequest(r, &req); err != nil {
+		resp.ErrorResponse(err, "invalid request")
+		return
+	}
+
+	mutedUntil, err := time.Parse(time.RFC3339, req.MutedUntil)
+	if err != nil {
+		resp.ErrorResponse(fmt.Errorf("invalid muted_until format, use RFC3339: %w", core_error.ErrInvalidArgument), "invalid request")
+		return
+	}
+
+	if err := h.service.MuteMember(ctx, roomID, userID, targetID, mutedUntil); err != nil {
+		resp.ErrorResponse(err, "failed to mute member")
+		return
+	}
+	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) UnmuteMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	targetID := r.PathValue("userId")
+
+	if err := h.service.UnmuteMember(ctx, roomID, userID, targetID); err != nil {
+		resp.ErrorResponse(err, "failed to unmute member")
 		return
 	}
 	resp.NoContentResponse()

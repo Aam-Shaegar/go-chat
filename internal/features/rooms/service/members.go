@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
@@ -102,4 +103,52 @@ func (s *RoomsService) GetMembers(ctx context.Context, roomID, userID string) ([
 		return nil, fmt.Errorf("access denied: %w", core_error.ErrUnauthorized)
 	}
 	return s.repo.GetMembers(ctx, roomID)
+}
+
+func (s *RoomsService) MuteMember(ctx context.Context, roomID, requesterID, targetUserID string, mutedUntil time.Time) error {
+	if requesterID == targetUserID {
+		return fmt.Errorf("cannot mute yourself: %w", core_error.ErrInvalidArgument)
+	}
+	requester, err := s.repo.GetMember(ctx, roomID, requesterID)
+	if err != nil {
+		return fmt.Errorf("get requester: %w", err)
+	}
+	if !requester.IsAdmin() {
+		return fmt.Errorf("only admin or owner can mute: %w", core_error.ErrUnauthorized)
+	}
+	target, err := s.repo.GetMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("get target member: %w", err)
+	}
+	if target.IsOwner() {
+		return fmt.Errorf("cannot mute room owner: %w", core_error.ErrUnauthorized)
+	}
+	if target.Role == domain_models.MemberRoleAdmin && !requester.IsOwner() {
+		return fmt.Errorf("only owner can mute admins: %w", core_error.ErrUnauthorized)
+	}
+	return s.repo.MuteMember(ctx, roomID, targetUserID, mutedUntil)
+}
+
+func (s *RoomsService) UnmuteMember(ctx context.Context, roomID, requesterID, targetUserID string) error {
+	if requesterID == targetUserID {
+		return fmt.Errorf("cannot unmute yourself: %w", core_error.ErrInvalidArgument)
+	}
+	requester, err := s.repo.GetMember(ctx, roomID, requesterID)
+	if err != nil {
+		return fmt.Errorf("get requester: %w", err)
+	}
+	if !requester.IsAdmin() {
+		return fmt.Errorf("only admin or owner can unmute: %w", core_error.ErrUnauthorized)
+	}
+	target, err := s.repo.GetMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("get target member: %w", err)
+	}
+	if target.IsOwner() {
+		return fmt.Errorf("cannot unmute room owner: %w", core_error.ErrUnauthorized)
+	}
+	if target.Role == domain_models.MemberRoleAdmin && !requester.IsOwner() {
+		return fmt.Errorf("only owner can unmute admins: %w", core_error.ErrUnauthorized)
+	}
+	return s.repo.UnmuteMember(ctx, roomID, targetUserID)
 }

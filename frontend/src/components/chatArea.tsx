@@ -1,12 +1,12 @@
 import { Fragment, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef, createContext } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { useChatStore, type RoomConnectionState } from '../store/chatStore'
+import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
-import { roomsApi, dmApi, readsApi } from '../api/rooms'
+import { roomsApi, dmApi } from '../api/rooms'
 import type { Message, RoomInvite, MessageReaction, RoomMember } from '../types'
 
 interface ChatAreaProps {
@@ -73,6 +73,12 @@ export function ChatArea({ onBack }: ChatAreaProps) {
   const isOwner = room?.owner_id === user?.id
   const canInvite = Boolean(room?.is_private && !room.is_dm && isOwner)
   const roomTitle = room?.is_dm ? room.name || 'Direct message' : room?.name || 'Chat'
+
+  const currentMember = useMemo(
+    () => members.find((m) => m.user_id === user?.id),
+    [members, user?.id]
+  )
+  const currentUserRole = currentMember?.role ?? 'member'
   const lastMessage = roomMessages[roomMessages.length - 1]
   const activeUnread = activeRoomId ? unreadCounts[activeRoomId] ?? 0 : 0
   const canSend = connectionState === 'connected'
@@ -370,6 +376,10 @@ export function ChatArea({ onBack }: ChatAreaProps) {
           members={members}
           loading={membersLoading}
           isDM={Boolean(room?.is_dm)}
+          currentUserId={user?.id ?? ''}
+          currentUserRole={currentUserRole}
+          roomId={activeRoomId ?? ''}
+          roomIsPrivate={Boolean(room?.is_private && !room?.is_dm)}
         />
       </section>
     </ComposerContext.Provider>
@@ -823,12 +833,16 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
-function MembersModal({ isOpen, onClose, members, loading, isDM }: {
+function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, currentUserRole, roomId, roomIsPrivate }: {
   isOpen: boolean
   onClose: () => void
   members: RoomMember[]
   loading: boolean
   isDM: boolean
+  currentUserId: string
+  currentUserRole: string
+  roomId: string
+  roomIsPrivate: boolean
 }) {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') onClose()
@@ -853,6 +867,109 @@ function MembersModal({ isOpen, onClose, members, loading, isDM }: {
       case 'owner': return 'bg-amber-100 text-amber-700'
       case 'admin': return 'bg-blue-100 text-blue-700'
       default: return 'bg-slate-100 text-slate-700'
+    }
+  }
+
+  const roleHierarchy = { owner: 3, admin: 2, member: 1 }
+  const canManage = (targetRole: string) => {
+    return roleHierarchy[currentUserRole as keyof typeof roleHierarchy] > roleHierarchy[targetRole as keyof typeof roleHierarchy]
+  }
+
+  const isMuted = (member: RoomMember) => {
+    if (!member.muted_until) return false
+    return new Date(member.muted_until) > new Date()
+  }
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    member: RoomMember | null
+  } | null>(null)
+
+  const closeContextMenu = () => setContextMenu(null)
+
+  const handleContextMenu = (e: React.MouseEvent, member: RoomMember) => {
+    e.preventDefault()
+    if (member.user_id === currentUserId) return // Can't manage yourself
+    setContextMenu({ x: e.clientX, y: e.clientY, member })
+  }
+
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (contextMenu && !e.target.closest('[data-context-menu]')) {
+      closeContextMenu()
+    }
+  }, [contextMenu])
+
+  useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [handleClickOutside])
+
+  // Mute time modal state
+  const [muteModal, setMuteModal] = useState<{
+    member: RoomMember | null
+    isOpen: boolean
+  }>({ member: null, isOpen: false })
+
+  const openMuteModal = (member: RoomMember) => {
+    setMuteModal({ member, isOpen: true })
+    closeContextMenu()
+  }
+
+  const closeMuteModal = () => setMuteModal({ member: null, isOpen: false })
+
+  const muteOptions = [
+    { label: '5 minutes', minutes: 5 },
+    { label: '10 minutes', minutes: 10 },
+    { label: '30 minutes', minutes: 30 },
+    { label: '1 hour', minutes: 60 },
+    { label: '6 hours', minutes: 360 },
+    { label: '24 hours', minutes: 1440 },
+    { label: '7 days', minutes: 10080 },
+  ]
+
+  const handleMute = async (minutes: number) => {
+    if (!muteModal.member) return
+    // eslint-disable-next-line react-hooks/purity
+    const now = Date.now()
+    const mutedUntil = new Date(now + minutes * 60 * 1000).toISOString()
+    try {
+      await roomsApi.muteMember(roomId, muteModal.member.user_id, mutedUntil)
+      closeMuteModal()
+      // Refresh members list - could trigger a callback or use optimistic update
+    } catch (error) {
+      console.error('Failed to mute member:', error)
+    }
+  }
+
+  const handleUnmute = async (member: RoomMember) => {
+    try {
+      await roomsApi.unmuteMember(roomId, member.user_id)
+      closeContextMenu()
+    } catch (error) {
+      console.error('Failed to unmute member:', error)
+    }
+  }
+
+  const handleKick = async (member: RoomMember) => {
+    if (!confirm(`Kick ${member.username} from this room?`)) return
+    try {
+      await roomsApi.kickMember(roomId, member.user_id)
+      closeContextMenu()
+    } catch (error) {
+      console.error('Failed to kick member:', error)
+    }
+  }
+
+  const handleDM = async (member: RoomMember) => {
+    try {
+      await dmApi.openDM(member.user_id)
+      closeContextMenu()
+      onClose()
+      // The parent component should handle navigating to the DM
+    } catch (error) {
+      console.error('Failed to open DM:', error)
     }
   }
 
@@ -881,13 +998,25 @@ function MembersModal({ isOpen, onClose, members, loading, isDM }: {
           ) : (
             <ul className="space-y-2" role="list">
               {members.map((member) => (
-                <li key={member.user_id} className="flex items-center gap-3">
+                <li
+                  key={member.user_id}
+                  className="flex items-center gap-3 relative"
+                  onContextMenu={(e) => handleContextMenu(e, member)}
+                >
                   <ConversationAvatar name={member.username} isDM={isDM} compact />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
-                      {getRoleLabel(member.role)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                        {getRoleLabel(member.role)}
+                      </span>
+                      {isMuted(member) && (
+                        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
+                          <Icon name="bell" className="h-3 w-3" />
+                          Muted
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -899,6 +1028,95 @@ function MembersModal({ isOpen, onClose, members, loading, isDM }: {
           <p className="text-center text-xs text-slate-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          data-context-menu
+          className="fixed z-60 rounded-xl border border-slate-200 bg-white shadow-lg min-w-[160px] py-1"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {/* DM */}
+          <button
+            type="button"
+            onClick={() => handleDM(contextMenu.member!)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            <Icon name="message" className="h-4 w-4" />
+            Direct Message
+          </button>
+
+          {canManage(contextMenu.member.role) && (
+            <>
+              <div className="border-t border-slate-100 my-1" />
+
+              {/* Kick - only for private rooms */}
+              {roomIsPrivate && (
+                <button
+                  type="button"
+                  onClick={() => handleKick(contextMenu.member!)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Icon name="userMinus" className="h-4 w-4" />
+                  Kick
+                </button>
+              )}
+
+              {/* Mute/Unmute */}
+              {isMuted(contextMenu.member) ? (
+                <button
+                  type="button"
+                  onClick={() => handleUnmute(contextMenu.member!)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <Icon name="bell" className="h-4 w-4" />
+                  Unmute
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openMuteModal(contextMenu.member!)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <Icon name="bellOff" className="h-4 w-4" />
+                  Mute
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Mute Time Modal */}
+      {muteModal.isOpen && muteModal.member && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h3 className="text-sm font-semibold text-slate-950">Mute {muteModal.member.username}</h3>
+              <button
+                type="button"
+                onClick={closeMuteModal}
+                aria-label="Close"
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+              >
+                <Icon name="close" className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-2">
+              {muteOptions.map((option) => (
+                <button
+                  key={option.minutes}
+                  type="button"
+                  onClick={() => handleMute(option.minutes)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-sm text-slate-700 rounded-lg hover:bg-slate-50 transition"
+                >
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -931,7 +1149,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'bell' | 'bellOff'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -945,6 +1163,10 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />,
     trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
     check: <path d="M20 6 9 17l-5-5" />,
+    message: <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8zM17 9h-1v4h1v-4zm-4 0H9v4h4V9zm4 6H9v4h8v-4z" />,
+    userMinus: <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 7h16" />,
+    bell: <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />,
+    bellOff: <path d="M8.7 3.3a20.2 20.2 0 0 0 0 21.4M22.5 8.5a20.2 20.2 0 0 1-20.2 10.2M18 8a6 6 0 0 0-9.3 3.3m-4.7 5.7A6.1 6.1 0 0 0 14 18c0 7-3 7-3 9M10 21h4M1 1l22 22" />,
   }
 
   return (

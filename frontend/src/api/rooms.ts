@@ -23,6 +23,15 @@ export const roomsApi = {
   getMembers: (id: string) =>
     client.get<RoomMember[]>(`/rooms/${id}/members`),
 
+  kickMember: (roomId: string, userId: string) =>
+    client.delete(`/rooms/${roomId}/members/${userId}`),
+
+  muteMember: (roomId: string, userId: string, mutedUntil: string) =>
+    client.patch(`/rooms/${roomId}/members/${userId}/mute`, { muted_until: mutedUntil }),
+
+  unmuteMember: (roomId: string, userId: string) =>
+    client.delete(`/rooms/${roomId}/members/${userId}/mute`),
+
   getMessages: (id: string, before?: string, limit = 50) =>
     client.get<MessagesResponse>(`/rooms/${id}/messages`, {
       params: { before, limit },
