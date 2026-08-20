@@ -219,6 +219,8 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const isCurrentUserMuted = activeRoomId && user?.id ? isMemberMuted(activeRoomId, user.id) : false
   const currentUserMutedUntil = activeRoomId && user?.id ? getMutedUntil(activeRoomId, user.id) : undefined
 
+  console.log('[COMPONENT DEBUG] isCurrentUserMuted:', isCurrentUserMuted, 'currentUserMutedUntil:', currentUserMutedUntil, 'activeRoomId:', activeRoomId, 'userId:', user?.id)
+
   const isMuted = useCallback((member: RoomMember) => {
     if (!activeRoomId) return false
     return isMemberMuted(activeRoomId, member.user_id)
@@ -1119,7 +1121,9 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   const isMuted = useCallback((userId: string) => {
     if (!roomId) return false
     const store = useChatStore.getState()
-    return store.isMemberMuted(roomId, userId)
+    const result = store.isMemberMuted(roomId, userId)
+    console.log('[MEMBERS MODAL DEBUG] isMuted:', userId, 'result:', result)
+    return result
   }, [roomId])
 
   if (!isOpen) return null
