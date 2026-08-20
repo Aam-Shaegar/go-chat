@@ -47,6 +47,7 @@ interface ChatState {
   setMemberUnmuted: (roomId: string, userId: string) => void
   isMemberMuted: (roomId: string, userId: string) => boolean
   getMutedUntil: (roomId: string, userId: string) => string | undefined
+  syncMutedMembers: (roomId: string, members: RoomMember[]) => void
   getOnlineCount: (roomId: string, currentUserId?: string) => number
   isUserOnline: (roomId: string, userId: string) => boolean
   resetChat: () => void
@@ -360,6 +361,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   getMutedUntil: (roomId, userId) => {
     return get().mutedMembers[roomId]?.[userId]
+  },
+
+  syncMutedMembers: (roomId: string, members: RoomMember[]) => {
+    set((s) => {
+      const mutedMembers = { ...s.mutedMembers }
+      if (!mutedMembers[roomId]) {
+        mutedMembers[roomId] = {}
+      }
+      for (const member of members) {
+        if (member.muted_until) {
+          mutedMembers[roomId][member.user_id] = member.muted_until
+        }
+      }
+      return { mutedMembers }
+    })
   },
 
   getOnlineCount: (roomId, currentUserId) => {
