@@ -105,6 +105,17 @@ func (s *RoomsService) GetMembers(ctx context.Context, roomID, userID string) ([
 	return s.repo.GetMembers(ctx, roomID)
 }
 
+func (s *RoomsService) GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error) {
+	isMember, err := s.repo.IsMember(ctx, roomID, userID)
+	if err != nil {
+		return domain_models.RoomMember{}, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return domain_models.RoomMember{}, fmt.Errorf("access denied: %w", core_error.ErrUnauthorized)
+	}
+	return s.repo.GetMember(ctx, roomID, userID)
+}
+
 func (s *RoomsService) MuteMember(ctx context.Context, roomID, requesterID, targetUserID string, mutedUntil time.Time) error {
 	if requesterID == targetUserID {
 		return fmt.Errorf("cannot mute yourself: %w", core_error.ErrInvalidArgument)

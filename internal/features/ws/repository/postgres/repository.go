@@ -244,6 +244,39 @@ func (r *WSRepository) GetRoomMemberIDs(ctx context.Context, roomID string) ([]s
 	return userIDs, nil
 }
 
+func (r *WSRepository) GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	query := `
+		SELECT rm.room_id, rm.user_id, u.username, rm.role, rm.joined_at, rm.muted_until
+		FROM gochat.room_members rm
+		JOIN gochat.users u ON u.id=rm.user_id
+		WHERE rm.room_id=$1 AND rm.user_id=$2;
+	`
+	row := r.pool.QueryRow(ctx, query, roomID, userID)
+	var m struct {
+		RoomID     string
+		UserID     string
+		Username   string
+		Role       string
+		JoinedAt   time.Time
+		MutedUntil *time.Time
+	}
+	err := row.Scan(&m.RoomID, &m.UserID, &m.Username, &m.Role, &m.JoinedAt, &m.MutedUntil)
+	if err != nil {
+		if errors.Is(err, core_postgres_pool.ErrNoRows) {
+			return domain_models.RoomMember{}, fmt.Errorf("member not found: %w", core_postgres_pool.ErrNoRows)
+		}
+		return domain_models.RoomMember{}, fmt.Errorf("scan member: %w", err)
+	}
+	return domain_models.NewRoomMember(
+		m.RoomID, m.UserID, m.Username,
+		domain_models.MemberRole(m.Role),
+		m.JoinedAt, m.MutedUntil,
+	), nil
+}
+
 func scanMessage(row core_postgres_pool.Row) (domain_models.Message, error) {
 	var m domain_models.Message
 	err := row.Scan(

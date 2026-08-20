@@ -25,6 +25,8 @@ const (
 	EventTypeUserTyping      EventType = "user_typing"
 	EventTypeUserJoined      EventType = "user_joined"
 	EventTypeUserLeft        EventType = "user_left"
+	EventTypeUserMuted       EventType = "user_muted"
+	EventTypeUserUnmuted     EventType = "user_unmuted"
 	EventTypeError           EventType = "error"
 )
 
@@ -123,4 +125,21 @@ type UserJoinedPayload struct {
 
 type ErrorPayload struct {
 	Message string `json:"message"`
+}
+
+type UserMutedPayload struct {
+	RoomID      string    `json:"room_id"`
+	UserID      string    `json:"user_id"`
+	Username    string    `json:"username"`
+	MutedUntil  time.Time `json:"muted_until"`
+	MutedBy     string    `json:"muted_by"`
+	MutedByName string    `json:"muted_by_name"`
+}
+
+type UserUnmutedPayload struct {
+	RoomID   string `json:"room_id"`
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	UnmutedBy     string `json:"unmuted_by"`
+	UnmutedByName string `json:"unmuted_by_name"`
 }

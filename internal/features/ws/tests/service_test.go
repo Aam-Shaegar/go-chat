@@ -53,6 +53,11 @@ func (m *MockRepository) GetRoomMemberIDs(ctx context.Context, roomID string) ([
 	return args.Get(0).([]string), args.Error(1)
 }
 
+func (m *MockRepository) GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error) {
+	args := m.Called(ctx, roomID, userID)
+	return args.Get(0).(domain_models.RoomMember), args.Error(1)
+}
+
 type MockHub struct {
 	mock.Mock
 }

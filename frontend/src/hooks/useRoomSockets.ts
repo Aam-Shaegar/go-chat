@@ -11,7 +11,9 @@ import type {
   Room,
   UserJoinedPayload,
   UserLeftPayload,
+  UserMutedPayload,
   UserTypingPayload,
+  UserUnmutedPayload,
   WSEvent,
 } from '../types'
 
@@ -99,6 +101,16 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
         const p = event.payload as UserLeftPayload
         if (p.user_id === auth.user?.id) break
         chat.setUserOffline(p.room_id, p.user_id)
+        break
+      }
+      case 'user_muted': {
+        const p = event.payload as UserMutedPayload
+        chat.setMemberMuted(p.room_id, p.user_id, p.muted_until)
+        break
+      }
+      case 'user_unmuted': {
+        const p = event.payload as UserUnmutedPayload
+        chat.setMemberUnmuted(p.room_id, p.user_id)
         break
       }
       case 'error': {

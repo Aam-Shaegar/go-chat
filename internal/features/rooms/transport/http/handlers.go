@@ -11,6 +11,7 @@ import (
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
 	core_http_request "go-chat/internal/core/transport/http/request"
 	core_http_response "go-chat/internal/core/transport/http/response"
+	ws_domain "go-chat/internal/features/ws/domain"
 )
 
 // Request/Response types
@@ -297,6 +298,33 @@ func (h *RoomsHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
 		resp.ErrorResponse(err, "failed to mute member")
 		return
 	}
+
+	// Get target member for event payload
+	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
+	if err == nil {
+		// Get requester info
+		requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+		requesterName := ""
+		if requesterMember.Username != "" {
+			requesterName = requesterMember.Username
+		}
+
+		// Publish mute event via WebSocket
+		if h.hub != nil {
+			_ = h.hub.Publish(ctx, roomID, ws_domain.OutgoingEvent{
+				Type: ws_domain.EventTypeUserMuted,
+				Payload: ws_domain.UserMutedPayload{
+					RoomID:      roomID,
+					UserID:      targetID,
+					Username:    targetMember.Username,
+					MutedUntil:  mutedUntil,
+					MutedBy:     userID,
+					MutedByName: requesterName,
+				},
+			})
+		}
+	}
+
 	resp.NoContentResponse()
 }
 
@@ -314,10 +342,39 @@ func (h *RoomsHandler) UnmuteMember(w http.ResponseWriter, r *http.Request) {
 	roomID := r.PathValue("roomId")
 	targetID := r.PathValue("userId")
 
+	// Get target member for event payload
+	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
+	if err != nil {
+		resp.ErrorResponse(err, "failed to get target member")
+		return
+	}
+
 	if err := h.service.UnmuteMember(ctx, roomID, userID, targetID); err != nil {
 		resp.ErrorResponse(err, "failed to unmute member")
 		return
 	}
+
+	// Get requester info
+	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+	requesterName := ""
+	if requesterMember.Username != "" {
+		requesterName = requesterMember.Username
+	}
+
+	// Publish unmute event via WebSocket
+	if h.hub != nil {
+		_ = h.hub.Publish(ctx, roomID, ws_domain.OutgoingEvent{
+			Type: ws_domain.EventTypeUserUnmuted,
+			Payload: ws_domain.UserUnmutedPayload{
+				RoomID:        roomID,
+				UserID:        targetID,
+				Username:      targetMember.Username,
+				UnmutedBy:     userID,
+				UnmutedByName: requesterName,
+			},
+		})
+	}
+
 	resp.NoContentResponse()
 }
 

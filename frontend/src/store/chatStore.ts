@@ -42,6 +42,8 @@ interface ChatState {
   setConnectionState: (roomId: string, state: RoomConnectionState) => void
   setUserOnline: (roomId: string, userId: string) => void
   setUserOffline: (roomId: string, userId: string) => void
+  setMemberMuted: (roomId: string, userId: string, mutedUntil: string) => void
+  setMemberUnmuted: (roomId: string, userId: string) => void
   getOnlineCount: (roomId: string, currentUserId?: string) => number
   isUserOnline: (roomId: string, userId: string) => boolean
   resetChat: () => void
@@ -318,6 +320,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const nextPresence = new Set(roomPresence)
       nextPresence.delete(userId)
       return { presence: { ...s.presence, [roomId]: nextPresence } }
+    }),
+
+  setMemberMuted: () => set(() => {
+      // Members list is stored in MembersModal, fetched on demand
+      return {}
+    }),
+
+  setMemberUnmuted: () => set(() => {
+      // Members list is stored in MembersModal, fetched on demand
+      return {}
     }),
 
   getOnlineCount: (roomId, currentUserId) => {

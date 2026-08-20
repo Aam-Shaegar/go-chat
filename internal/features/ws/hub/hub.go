@@ -33,6 +33,11 @@ type Logger interface {
 	Warn(msg string, fields ...zap.Field)
 }
 
+type HubInterface interface {
+	Publish(ctx context.Context, roomID string, event ws_domain.OutgoingEvent) error
+	PublishToUser(ctx context.Context, userID string, event ws_domain.OutgoingEvent) error
+}
+
 func NewHub(redisClient *redis.Client, log Logger) *Hub {
 	return &Hub{
 		rooms: make(map[string]map[string]*ws_client.Client),

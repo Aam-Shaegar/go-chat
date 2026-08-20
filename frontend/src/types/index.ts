@@ -79,6 +79,8 @@ export type WSEventType =
   | 'user_typing'
   | 'user_joined'
   | 'user_left'
+  | 'user_muted'
+  | 'user_unmuted'
   | 'error'
 
 export interface WSEvent<T = unknown> {
@@ -126,6 +128,23 @@ export interface UserLeftPayload {
   room_id: string
   user_id: string
   username: string
+}
+
+export interface UserMutedPayload {
+  room_id: string
+  user_id: string
+  username: string
+  muted_until: string
+  muted_by: string
+  muted_by_name: string
+}
+
+export interface UserUnmutedPayload {
+  room_id: string
+  user_id: string
+  username: string
+  unmuted_by: string
+  unmuted_by_name: string
 }
 
 export interface ErrorPayload {

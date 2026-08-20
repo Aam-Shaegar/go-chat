@@ -8,10 +8,12 @@ import (
 	domain_models "go-chat/internal/core/domain/models"
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
 	core_http_server "go-chat/internal/core/transport/http/server"
+	ws_hub "go-chat/internal/features/ws/hub"
 )
 
 type RoomsHandler struct {
 	service RoomsService
+	hub     ws_hub.HubInterface
 }
 
 type RoomsService interface {
@@ -28,6 +30,7 @@ type RoomsService interface {
 	MuteMember(ctx context.Context, roomID, requesterID, targetUserID string, mutedUntil time.Time) error
 	UnmuteMember(ctx context.Context, roomID, requesterID, targetUserID string) error
 	GetMembers(ctx context.Context, roomID, userID string) ([]domain_models.RoomMember, error)
+	GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error)
 
 	CreateInvite(ctx context.Context, roomID, userID string, maxUses int, ttl *time.Duration) (domain_models.RoomInvite, error)
 	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error)
@@ -35,8 +38,8 @@ type RoomsService interface {
 	DeactivateInvite(ctx context.Context, token, userID string) error
 }
 
-func NewRoomsHandler(service RoomsService) *RoomsHandler {
-	return &RoomsHandler{service: service}
+func NewRoomsHandler(service RoomsService, hub ws_hub.HubInterface) *RoomsHandler {
+	return &RoomsHandler{service: service, hub: hub}
 }
 
 func (h *RoomsHandler) Routes(auth core_http_middleware.Middleware) []core_http_server.Route {

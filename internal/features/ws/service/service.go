@@ -30,6 +30,7 @@ type Repository interface {
 	AddReaction(ctx context.Context, roomID string, reaction domain_models.RawMessageReaction) (domain_models.Message, error)
 	RemoveReaction(ctx context.Context, messageID, roomID, userID string) (domain_models.Message, error)
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
+	GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error)
 }
 
 type Hub interface {
@@ -334,4 +335,33 @@ func (s *WSService) publishRoomEvent(ctx context.Context, roomID string, event w
 		}
 	}
 	return nil
+}
+
+func (s *WSService) PublishUserMuted(ctx context.Context, roomID, targetUserID, targetUsername, mutedBy, mutedByName string, mutedUntil time.Time) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserMuted,
+		Payload: ws_domain.UserMutedPayload{
+			RoomID:      roomID,
+			UserID:      targetUserID,
+			Username:    targetUsername,
+			MutedUntil:  mutedUntil,
+			MutedBy:     mutedBy,
+			MutedByName: mutedByName,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserUnmuted,
+		Payload: ws_domain.UserUnmutedPayload{
+			RoomID:        roomID,
+			UserID:        targetUserID,
+			Username:      targetUsername,
+			UnmutedBy:     unmutedBy,
+			UnmutedByName: unmutedByName,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
 }
