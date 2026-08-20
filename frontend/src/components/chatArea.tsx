@@ -74,6 +74,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       setActiveRoom(data.id)
       setShowMembersModal(false)
       setSidebarOpen?.(false)
+      closeContextMenu()
     } catch (error) {
       console.error('Failed to open DM:', error)
     }
@@ -263,6 +264,13 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     if (!content || !activeRoomId) return
     if (!canSend) {
       setComposerError('Waiting for connection')
+      return
+    }
+
+    // Check if current user is muted in this room
+    const currentMember = members.find((m) => m.user_id === user?.id)
+    if (currentMember && currentMember.muted_until && new Date(currentMember.muted_until) > new Date()) {
+      setComposerError('You are muted in this room')
       return
     }
 
@@ -479,6 +487,12 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
           {(composerError || !canSend) && (
             <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-slate-500">
               {composerError || !canSend ? 'Connecting...' : ''}
+            </p>
+          )}
+
+          {currentMember && currentMember.muted_until && new Date(currentMember.muted_until) > new Date() && (
+            <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-orange-600">
+              You are muted until {new Date(currentMember.muted_until).toLocaleTimeString()}
             </p>
           )}
         </form>

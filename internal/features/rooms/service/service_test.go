@@ -74,6 +74,16 @@ func (m *MockRepository) UpdateMemberRole(ctx context.Context, roomID, userID st
 	return args.Error(0)
 }
 
+func (m *MockRepository) MuteMember(ctx context.Context, roomID, userID string, mutedUntil time.Time) error {
+	args := m.Called(ctx, roomID, userID, mutedUntil)
+	return args.Error(0)
+}
+
+func (m *MockRepository) UnmuteMember(ctx context.Context, roomID, userID string) error {
+	args := m.Called(ctx, roomID, userID)
+	return args.Error(0)
+}
+
 func (m *MockRepository) CreateInvite(ctx context.Context, invite domain_models.RoomInvite) (domain_models.RoomInvite, error) {
 	args := m.Called(ctx, invite)
 	return args.Get(0).(domain_models.RoomInvite), args.Error(1)
@@ -118,7 +128,7 @@ func newRoom(isPrivate bool) domain_models.Room {
 }
 
 func newMember(userID string, role domain_models.MemberRole) domain_models.RoomMember {
-	return domain_models.NewRoomMember(roomID, userID, "username", role, time.Now())
+	return domain_models.NewRoomMember(roomID, userID, "username", role, time.Now(), nil)
 }
 
 func newInvite(uses, maxUses int, isActive bool, expiresAt *time.Time) domain_models.RoomInvite {
