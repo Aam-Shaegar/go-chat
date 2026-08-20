@@ -209,59 +209,38 @@ export function ChatArea({ onBack }: ChatAreaProps) {
             <Icon name="back" className="h-5 w-5" />
           </button>
 
-          {!room?.is_dm && (
-            <button
-              type="button"
-              onClick={openMembersModal}
-              aria-label="View members"
-              className="flex items-center gap-3 min-w-0 flex-1 p-1 rounded-xl transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#229ed9] focus:ring-offset-2"
-            >
-              <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
-                    {room?.is_dm ? roomTitle : `#${roomTitle}`}
-                  </h2>
-                  {room?.is_private && !room.is_dm && (
-                    <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  )}
-                </div>
-                <p className="truncate text-xs text-slate-500">
-                  {otherTyping.length > 0
-                    ? `${otherTyping.join(', ')} typing`
-                    : room?.is_dm
-                      ? otherUserOnline
-                        ? 'online'
-                        : otherUserLastSeen
-                          ? `last seen ${formatActivity(otherUserLastSeen)}`
-                          : 'offline'
-                      : `${onlineCount} online`}
-                </p>
+          <div
+            className="flex items-center gap-3 min-w-0 flex-1 p-1"
+            onClick={!room?.is_dm ? openMembersModal : undefined}
+            role={!room?.is_dm ? 'button' : undefined}
+            tabIndex={!room?.is_dm ? 0 : undefined}
+            onKeyDown={!room?.is_dm ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMembersModal(); }} : undefined}
+            aria-label={!room?.is_dm ? 'View members' : undefined}
+            style={!room?.is_dm ? { cursor: 'pointer' } : undefined}
+          >
+            <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
+                  {room?.is_dm ? roomTitle : `#${roomTitle}`}
+                </h2>
+                {room?.is_private && !room.is_dm && (
+                  <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                )}
               </div>
-            </button>
-          )}
-
-          {room?.is_dm && (
-            <div className="flex items-center gap-3 min-w-0 flex-1 p-1">
-              <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
-                    {roomTitle}
-                  </h2>
-                </div>
-                <p className="truncate text-xs text-slate-500">
-                  {otherTyping.length > 0
-                    ? `${otherTyping.join(', ')} typing`
-                    : otherUserOnline
+              <p className="truncate text-xs text-slate-500">
+                {otherTyping.length > 0
+                  ? `${otherTyping.join(', ')} typing`
+                  : room?.is_dm
+                    ? otherUserOnline
                       ? 'online'
                       : otherUserLastSeen
                         ? `last seen ${formatActivity(otherUserLastSeen)}`
-                        : 'offline'}
-                </p>
-              </div>
+                        : 'offline'
+                    : `${onlineCount} online`}
+              </p>
             </div>
-          )}
+          </div>
 
           {canInvite && (
             <button
