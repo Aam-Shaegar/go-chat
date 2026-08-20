@@ -101,13 +101,18 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     try {
       console.log('[DEBUG] Muting member:', muteModal.member.user_id, 'until:', mutedUntil)
       const response = await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
-      console.log('[DEBUG] Mute response:', response)
+      console.log('[DEBUG] Mute response status:', response.status)
       setMuteModal({ member: null, isOpen: false })
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
+      console.log('[DEBUG] GetMembers raw response:', data)
+      if (data) {
+        data.forEach((m: RoomMember) => {
+          console.log('[DEBUG] Member:', m.username, 'muted_until:', m.muted_until)
+        })
+      }
       setMembers(data ?? [])
-      console.log('[DEBUG] Members refreshed:', data)
     } catch (error) {
       console.error('Failed to mute member:', error)
       if (error instanceof Error) {
@@ -121,12 +126,17 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     try {
       console.log('[DEBUG] Unmuting member:', member.user_id)
       const response = await roomsApi.unmuteMember(activeRoomId, member.user_id)
-      console.log('[DEBUG] Unmute response:', response)
+      console.log('[DEBUG] Unmute response status:', response.status)
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
+      console.log('[DEBUG] GetMembers raw response:', data)
+      if (data) {
+        data.forEach((m: RoomMember) => {
+          console.log('[DEBUG] Member:', m.username, 'muted_until:', m.muted_until)
+        })
+      }
       setMembers(data ?? [])
-      console.log('[DEBUG] Members refreshed:', data)
     } catch (error) {
       console.error('Failed to unmute member:', error)
       if (error instanceof Error) {
