@@ -209,35 +209,59 @@ export function ChatArea({ onBack }: ChatAreaProps) {
             <Icon name="back" className="h-5 w-5" />
           </button>
 
-          <button
-            type="button"
-            onClick={openMembersModal}
-            aria-label="View members"
-            className="flex items-center gap-3 min-w-0 flex-1 p-1 rounded-xl transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#229ed9] focus:ring-offset-2"
-          >
-            <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
-                  {room?.is_dm ? roomTitle : `#${roomTitle}`}
-                </h2>
-                {room?.is_private && !room.is_dm && (
-                  <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                )}
+          {!room?.is_dm && (
+            <button
+              type="button"
+              onClick={openMembersModal}
+              aria-label="View members"
+              className="flex items-center gap-3 min-w-0 flex-1 p-1 rounded-xl transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#229ed9] focus:ring-offset-2"
+            >
+              <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
+                    {room?.is_dm ? roomTitle : `#${roomTitle}`}
+                  </h2>
+                  {room?.is_private && !room.is_dm && (
+                    <Icon name="lock" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  )}
+                </div>
+                <p className="truncate text-xs text-slate-500">
+                  {otherTyping.length > 0
+                    ? `${otherTyping.join(', ')} typing`
+                    : room?.is_dm
+                      ? otherUserOnline
+                        ? 'online'
+                        : otherUserLastSeen
+                          ? `last seen ${formatActivity(otherUserLastSeen)}`
+                          : 'offline'
+                      : `${onlineCount} online`}
+                </p>
               </div>
-              <p className="truncate text-xs text-slate-500">
-                {otherTyping.length > 0
-                  ? `${otherTyping.join(', ')} typing`
-                  : room?.is_dm
-                    ? otherUserOnline
+            </button>
+          )}
+
+          {room?.is_dm && (
+            <div className="flex items-center gap-3 min-w-0 flex-1 p-1">
+              <ConversationAvatar name={roomTitle} isDM={Boolean(room?.is_dm)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-[15px] font-semibold leading-5 text-slate-950">
+                    {roomTitle}
+                  </h2>
+                </div>
+                <p className="truncate text-xs text-slate-500">
+                  {otherTyping.length > 0
+                    ? `${otherTyping.join(', ')} typing`
+                    : otherUserOnline
                       ? 'online'
                       : otherUserLastSeen
                         ? `last seen ${formatActivity(otherUserLastSeen)}`
-                        : 'offline'
-                    : `${onlineCount} online`}
-              </p>
+                        : 'offline'}
+                </p>
+              </div>
             </div>
-          </button>
+          )}
 
           {canInvite && (
             <button
