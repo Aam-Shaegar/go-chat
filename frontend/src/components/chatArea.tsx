@@ -11,6 +11,7 @@ import type { Message, RoomInvite, MessageReaction, RoomMember } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
+  setSidebarOpen?: (open: boolean) => void
 }
 
 interface ComposerContextValue {
@@ -126,11 +127,18 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     closeContextMenu()
   }, [])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, member: RoomMember) => {
+    e.preventDefault()
+    if (member.user_id === user?.id) return
+    setContextMenu({ x: e.clientX, y: e.clientY, member })
+  }, [user?.id])
+
   const handleClickOutside = useCallback((e: MouseEvent) => {
-    if (contextMenu && !e.target.closest('[data-context-menu]')) {
+    const target = e.target as Element
+    if (contextMenu && !target.closest('[data-context-menu]')) {
       closeContextMenu()
     }
-    if (muteModal.isOpen && !e.target.closest('[data-mute-modal]')) {
+    if (muteModal.isOpen && !target.closest('[data-mute-modal]')) {
       setMuteModal({ member: null, isOpen: false })
     }
   }, [contextMenu, muteModal.isOpen])
@@ -1095,52 +1103,52 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
             <div className="py-10 text-center text-sm text-slate-500">No members</div>
           ) : (
             <ul className="space-y-2" role="list">
-              {onContextMenu && member.user_id !== currentUserId && (
-                      <li
-                        key={member.user_id}
-                        className="flex items-center gap-3 relative"
-                        onContextMenu={(e) => onContextMenu(e, member)}
-                      >
-                        <ConversationAvatar name={member.username} isDM={isDM} compact />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
-                              {getRoleLabel(member.role)}
-                            </span>
-                            {isMuted(member) && (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
-                                <Icon name="bell" className="h-3 w-3" />
-                                Muted
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </li>
-                    )}
-
-                    {!onContextMenu && (
-                      <li
-                        key={member.user_id}
-                        className="flex items-center gap-3 relative"
-                      >
-                        <ConversationAvatar name={member.username} isDM={isDM} compact />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
-                              {getRoleLabel(member.role)}
-                            </span>
-                            {isMuted(member) && (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
-                                <Icon name="bell" className="h-3 w-3" />
-                                Muted
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </li>
-                    )}
+              {members.map((member) => (
+                onContextMenu && member.user_id !== currentUserId ? (
+                  <li
+                    key={member.user_id}
+                    className="flex items-center gap-3 relative"
+                    onContextMenu={(e) => onContextMenu(e, member)}
+                  >
+                    <ConversationAvatar name={member.username} isDM={isDM} compact />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                          {getRoleLabel(member.role)}
+                        </span>
+                        {isMuted(member) && (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
+                            <Icon name="bell" className="h-3 w-3" />
+                            Muted
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ) : (
+                  <li
+                    key={member.user_id}
+                    className="flex items-center gap-3 relative"
+                  >
+                    <ConversationAvatar name={member.username} isDM={isDM} compact />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                          {getRoleLabel(member.role)}
+                        </span>
+                        {isMuted(member) && (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
+                            <Icon name="bell" className="h-3 w-3" />
+                            Muted
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                )
+              ))}
             </ul>
           )}
         </div>
