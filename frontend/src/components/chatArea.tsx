@@ -99,27 +99,39 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     const now = Date.now()
     const mutedUntil = new Date(now + minutes * 60 * 1000).toISOString()
     try {
-      await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
+      console.log('[DEBUG] Muting member:', muteModal.member.user_id, 'until:', mutedUntil)
+      const response = await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
+      console.log('[DEBUG] Mute response:', response)
       setMuteModal({ member: null, isOpen: false })
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
       setMembers(data ?? [])
+      console.log('[DEBUG] Members refreshed:', data)
     } catch (error) {
       console.error('Failed to mute member:', error)
+      if (error instanceof Error) {
+        alert('Failed to mute: ' + error.message)
+      }
     }
   }, [activeRoomId, muteModal.member])
 
   const handleUnmute = useCallback(async (member: RoomMember) => {
     if (!activeRoomId) return
     try {
-      await roomsApi.unmuteMember(activeRoomId, member.user_id)
+      console.log('[DEBUG] Unmuting member:', member.user_id)
+      const response = await roomsApi.unmuteMember(activeRoomId, member.user_id)
+      console.log('[DEBUG] Unmute response:', response)
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
       setMembers(data ?? [])
+      console.log('[DEBUG] Members refreshed:', data)
     } catch (error) {
       console.error('Failed to unmute member:', error)
+      if (error instanceof Error) {
+        alert('Failed to unmute: ' + error.message)
+      }
     }
   }, [activeRoomId])
 

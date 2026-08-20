@@ -427,3 +427,136 @@ func TestUpdateMemberRole_NotOwner(t *testing.T) {
 	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
 	repo.AssertNotCalled(t, "UpdateMemberRole")
 }
+
+// --- MuteMember тесты ---
+
+func TestMuteMember_Success(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	mutedUntil := time.Now().Add(1 * time.Hour)
+
+	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
+	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
+	repo.On("MuteMember", ctx, roomID, memberID, mutedUntil).Return(nil)
+
+	err := svc.MuteMember(ctx, roomID, ownerID, memberID, mutedUntil)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestMuteMember_CannotMuteSelf(t *testing.T) {
+	svc, _ := newService()
+	ctx := context.Background()
+	mutedUntil := time.Now().Add(1 * time.Hour)
+
+	err := svc.MuteMember(ctx, roomID, ownerID, ownerID, mutedUntil)
+
+	assert.ErrorIs(t, err, core_error.ErrInvalidArgument)
+}
+
+func TestMuteMember_CannotMuteOwner(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	mutedUntil := time.Now().Add(1 * time.Hour)
+
+	repo.On("GetMember", ctx, roomID, adminID).Return(newMember(adminID, domain_models.MemberRoleAdmin), nil)
+	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
+
+	err := svc.MuteMember(ctx, roomID, adminID, ownerID, mutedUntil)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "MuteMember")
+}
+
+func TestMuteMember_AdminCannotMuteAdmin(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	mutedUntil := time.Now().Add(1 * time.Hour)
+	otherAdminID := "other-admin-id"
+
+	repo.On("GetMember", ctx, roomID, adminID).Return(newMember(adminID, domain_models.MemberRoleAdmin), nil)
+	repo.On("GetMember", ctx, roomID, otherAdminID).Return(newMember(otherAdminID, domain_models.MemberRoleAdmin), nil)
+
+	err := svc.MuteMember(ctx, roomID, adminID, otherAdminID, mutedUntil)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "MuteMember")
+}
+
+func TestMuteMember_NotAdmin(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	mutedUntil := time.Now().Add(1 * time.Hour)
+
+	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
+
+	err := svc.MuteMember(ctx, roomID, memberID, ownerID, mutedUntil)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "MuteMember")
+}
+
+// --- UnmuteMember тесты ---
+
+func TestUnmuteMember_Success(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+
+	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
+	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
+	repo.On("UnmuteMember", ctx, roomID, memberID).Return(nil)
+
+	err := svc.UnmuteMember(ctx, roomID, ownerID, memberID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestUnmuteMember_CannotUnmuteSelf(t *testing.T) {
+	svc, _ := newService()
+	ctx := context.Background()
+
+	err := svc.UnmuteMember(ctx, roomID, ownerID, ownerID)
+
+	assert.ErrorIs(t, err, core_error.ErrInvalidArgument)
+}
+
+func TestUnmuteMember_CannotUnmuteOwner(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+
+	repo.On("GetMember", ctx, roomID, adminID).Return(newMember(adminID, domain_models.MemberRoleAdmin), nil)
+	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
+
+	err := svc.UnmuteMember(ctx, roomID, adminID, ownerID)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "UnmuteMember")
+}
+
+func TestUnmuteMember_AdminCannotUnmuteAdmin(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	otherAdminID := "other-admin-id"
+
+	repo.On("GetMember", ctx, roomID, adminID).Return(newMember(adminID, domain_models.MemberRoleAdmin), nil)
+	repo.On("GetMember", ctx, roomID, otherAdminID).Return(newMember(otherAdminID, domain_models.MemberRoleAdmin), nil)
+
+	err := svc.UnmuteMember(ctx, roomID, adminID, otherAdminID)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "UnmuteMember")
+}
+
+func TestUnmuteMember_NotAdmin(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+
+	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
+
+	err := svc.UnmuteMember(ctx, roomID, memberID, ownerID)
+
+	assert.ErrorIs(t, err, core_error.ErrUnauthorized)
+	repo.AssertNotCalled(t, "UnmuteMember")
+}
