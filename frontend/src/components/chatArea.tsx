@@ -30,7 +30,7 @@ function useChatArea() {
 }
 
 export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
-  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom } = useChatStore()
+  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom, isMemberMuted, getMutedUntil } = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
@@ -193,10 +193,14 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     return roleHierarchy[currentUserRole as keyof typeof roleHierarchy] > roleHierarchy[targetRole as keyof typeof roleHierarchy]
   }, [currentUserRole])
 
+  // Use store's mute status for real-time updates
+  const isCurrentUserMuted = activeRoomId && user?.id ? isMemberMuted(activeRoomId, user.id) : false
+  const currentUserMutedUntil = activeRoomId && user?.id ? getMutedUntil(activeRoomId, user.id) : undefined
+
   const isMuted = useCallback((member: RoomMember) => {
-    if (!member.muted_until) return false
-    return new Date(member.muted_until) > new Date()
-  }, [])
+    if (!activeRoomId) return false
+    return isMemberMuted(activeRoomId, member.user_id)
+  }, [activeRoomId, isMemberMuted])
   const lastMessage = roomMessages[roomMessages.length - 1]
   const activeUnread = activeRoomId ? unreadCounts[activeRoomId] ?? 0 : 0
   const canSend = connectionState === 'connected'
@@ -268,8 +272,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     }
 
     // Check if current user is muted in this room
-    const currentMember = members.find((m) => m.user_id === user?.id)
-    if (currentMember && currentMember.muted_until && new Date(currentMember.muted_until) > new Date()) {
+    if (isCurrentUserMuted) {
       setComposerError('You are muted in this room')
       return
     }
@@ -490,9 +493,9 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
             </p>
           )}
 
-          {currentMember && currentMember.muted_until && new Date(currentMember.muted_until) > new Date() && (
+          {isCurrentUserMuted && currentUserMutedUntil && (
             <p role="status" className="mx-auto mt-2 max-w-3xl px-2 text-xs text-orange-600">
-              You are muted until {new Date(currentMember.muted_until).toLocaleTimeString()}
+              You are muted until {new Date(currentUserMutedUntil).toLocaleTimeString()}
             </p>
           )}
         </form>
@@ -508,6 +511,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
           loading={membersLoading}
           isDM={Boolean(room?.is_dm)}
           currentUserId={user?.id ?? ''}
+          roomId={activeRoomId ?? ''}
           onContextMenu={handleContextMenu}
         />
 
@@ -544,7 +548,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
                 )}
 
                 {/* Mute/Unmute */}
-                {isMuted(contextMenu.member!) ? (
+                {isMuted(contextMenu.member!.user_id) ? (
                   <button
                     type="button"
                     onClick={() => handleUnmute(contextMenu.member!)}
@@ -1053,13 +1057,14 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
-function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, onContextMenu }: {
+function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu }: {
   isOpen: boolean
   onClose: () => void
   members: RoomMember[]
   loading: boolean
   isDM: boolean
   currentUserId: string
+  roomId: string
   onContextMenu?: (e: React.MouseEvent, member: RoomMember) => void
 }) {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -1088,10 +1093,12 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
     }
   }
 
-  const isMuted = (member: RoomMember) => {
-    if (!member.muted_until) return false
-    return new Date(member.muted_until) > new Date()
-  }
+  // Use store's mute status
+  const isMuted = useCallback((userId: string) => {
+    if (!roomId) return false
+    const store = useChatStore.getState()
+    return store.isMemberMuted(roomId, userId)
+  }, [roomId])
 
   if (!isOpen) return null
 
@@ -1131,7 +1138,7 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
-                        {isMuted(member) && (
+                        {isMuted(member.user_id) && (
                           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
                             <Icon name="bell" className="h-3 w-3" />
                             Muted
@@ -1152,7 +1159,7 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
-                        {isMuted(member) && (
+                        {isMuted(member.user_id) && (
                           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
                             <Icon name="bell" className="h-3 w-3" />
                             Muted

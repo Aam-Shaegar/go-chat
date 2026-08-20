@@ -15,6 +15,7 @@ interface ChatState {
   typingUsers: Record<string, string[]>
   connectionStates: Record<string, RoomConnectionState>
   presence: Record<string, Set<string>>
+  mutedMembers: Record<string, Record<string, string>>
 
   setRooms: (rooms: Room[]) => void
   setDMs: (dms: Room[]) => void
@@ -44,6 +45,8 @@ interface ChatState {
   setUserOffline: (roomId: string, userId: string) => void
   setMemberMuted: (roomId: string, userId: string, mutedUntil: string) => void
   setMemberUnmuted: (roomId: string, userId: string) => void
+  isMemberMuted: (roomId: string, userId: string) => boolean
+  getMutedUntil: (roomId: string, userId: string) => string | undefined
   getOnlineCount: (roomId: string, currentUserId?: string) => number
   isUserOnline: (roomId: string, userId: string) => boolean
   resetChat: () => void
@@ -90,6 +93,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   typingUsers: {},
   connectionStates: {},
   presence: {},
+  mutedMembers: {},
 
   setRooms: (rooms) =>
     set((s) => {
@@ -322,15 +326,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { presence: { ...s.presence, [roomId]: nextPresence } }
     }),
 
-  setMemberMuted: () => set(() => {
-      // Members list is stored in MembersModal, fetched on demand
-      return {}
+  setMemberMuted: (roomId, userId, mutedUntil) =>
+    set((s) => ({
+      mutedMembers: {
+        ...s.mutedMembers,
+        [roomId]: {
+          ...s.mutedMembers[roomId],
+          [userId]: mutedUntil,
+        },
+      },
+    })),
+
+  setMemberUnmuted: (roomId, userId) =>
+    set((s) => {
+      const roomMuted = s.mutedMembers[roomId]
+      if (!roomMuted) return {}
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [userId]: _removed, ...rest } = roomMuted
+      return {
+        mutedMembers: {
+          ...s.mutedMembers,
+          [roomId]: rest,
+        },
+      }
     }),
 
-  setMemberUnmuted: () => set(() => {
-      // Members list is stored in MembersModal, fetched on demand
-      return {}
-    }),
+  isMemberMuted: (roomId, userId) => {
+    const mutedUntil = get().mutedMembers[roomId]?.[userId]
+    if (!mutedUntil) return false
+    return new Date(mutedUntil) > new Date()
+  },
+
+  getMutedUntil: (roomId, userId) => {
+    return get().mutedMembers[roomId]?.[userId]
+  },
 
   getOnlineCount: (roomId, currentUserId) => {
     const roomPresence = get().presence[roomId]
@@ -355,5 +384,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     unreadCounts: {},
     typingUsers: {},
     connectionStates: {},
+    mutedMembers: {},
   }),
 }))
