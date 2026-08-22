@@ -1111,6 +1111,116 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
+function InviteTokensModal({ isOpen, onClose, invites, roomId }: {
+  isOpen: boolean
+  onClose: () => void
+  invites: RoomInvite[]
+  roomId: string
+}) {
+  const [deactivating, setDeactivating] = useState<string | null>(null)
+
+  const handleDeactivate = async (token: string) => {
+    if (!confirm('Deactivate this invite token?')) return
+    setDeactivating(token)
+    try {
+      await roomsApi.deactivateInvite(token)
+      onClose()
+    } catch (error) {
+      console.error('Failed to deactivate invite:', error)
+      alert('Failed to deactivate invite')
+    } finally {
+      setDeactivating(null)
+    }
+  }
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (!isOpen) return
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, handleKeyDown])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
+          <h3 className="text-sm font-semibold text-slate-950">Invite tokens</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-5">
+          {invites.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-500">No invite tokens</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="pb-3 px-2">Token</th>
+                    <th className="pb-3 px-2">Created by</th>
+                    <th className="pb-3 px-2 text-right">Uses / Max</th>
+                    <th className="pb-3 px-2 text-right">Remaining</th>
+                    <th className="pb-3 px-2">Created at</th>
+                    <th className="pb-3 px-2">Expires at</th>
+                    <th className="pb-3 px-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.map((invite) => (
+                    <tr key={invite.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-2">
+                        <code className="break-all font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200">{invite.token}</code>
+                      </td>
+                      <td className="py-3 px-2 text-slate-700">{invite.created_by}</td>
+                      <td className="py-3 px-2 text-right text-slate-700">
+                        {invite.uses} / {invite.max_uses === 0 ? '∞' : invite.max_uses}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          invite.max_uses === 0 ? 'bg-green-100 text-green-700' :
+                          invite.max_uses - invite.uses > 0 ? 'bg-[#229ed9] text-white' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {invite.max_uses === 0 ? 'Unlimited' : invite.max_uses - invite.uses}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-slate-700">{new Date(invite.created_at).toLocaleString()}</td>
+                      <td className="py-3 px-2 text-slate-700">
+                        {invite.expires_at ? new Date(invite.expires_at).toLocaleString() : 'Never'}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeactivate(invite.token)}
+                          disabled={deactivating === invite.token}
+                          className="h-8 px-3 rounded-full bg-red-50 text-red-600 text-sm font-medium transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deactivating === invite.token ? 'Deactivating...' : 'Deactivate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu, invites, currentUserRole }: {
   isOpen: boolean
   onClose: () => void
@@ -1269,116 +1379,6 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
       </ul>
     )
   }
-}
-
-function InviteTokensModal({ isOpen, onClose, invites, roomId }: {
-  isOpen: boolean
-  onClose: () => void
-  invites: RoomInvite[]
-  roomId: string
-}) {
-  const [deactivating, setDeactivating] = useState<string | null>(null)
-
-  const handleDeactivate = async (token: string) => {
-    if (!confirm('Deactivate this invite token?')) return
-    setDeactivating(token)
-    try {
-      await roomsApi.deactivateInvite(token)
-      onClose()
-    } catch (error) {
-      console.error('Failed to deactivate invite:', error)
-      alert('Failed to deactivate invite')
-    } finally {
-      setDeactivating(null)
-    }
-  }
-
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'Escape') onClose()
-  }, [onClose])
-
-  useEffect(() => {
-    if (!isOpen) return
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, handleKeyDown])
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
-          <h3 className="text-sm font-semibold text-slate-950">Invite tokens</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            <Icon name="close" className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-auto p-5">
-          {invites.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-500">No invite tokens</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="pb-3 px-2">Token</th>
-                    <th className="pb-3 px-2">Created by</th>
-                    <th className="pb-3 px-2 text-right">Uses / Max</th>
-                    <th className="pb-3 px-2 text-right">Remaining</th>
-                    <th className="pb-3 px-2">Created at</th>
-                    <th className="pb-3 px-2">Expires at</th>
-                    <th className="pb-3 px-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invites.map((invite) => (
-                    <tr key={invite.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-2">
-                        <code className="break-all font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200">{invite.token}</code>
-                      </td>
-                      <td className="py-3 px-2 text-slate-700">{invite.created_by}</td>
-                      <td className="py-3 px-2 text-right text-slate-700">
-                        {invite.uses} / {invite.max_uses === 0 ? '∞' : invite.max_uses}
-                      </td>
-                      <td className="py-3 px-2 text-right">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          invite.max_uses === 0 ? 'bg-green-100 text-green-700' :
-                          invite.max_uses - invite.uses > 0 ? 'bg-[#229ed9] text-white' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {invite.max_uses === 0 ? 'Unlimited' : invite.max_uses - invite.uses}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-slate-700">{new Date(invite.created_at).toLocaleString()}</td>
-                      <td className="py-3 px-2 text-slate-700">
-                        {invite.expires_at ? new Date(invite.expires_at).toLocaleString() : 'Never'}
-                      </td>
-                      <td className="py-3 px-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDeactivate(invite.token)}
-                          disabled={deactivating === invite.token}
-                          className="h-8 px-3 rounded-full bg-red-50 text-red-600 text-sm font-medium transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {deactivating === invite.token ? 'Deactivating...' : 'Deactivate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function DateDivider({ value }: { value: string }) {
