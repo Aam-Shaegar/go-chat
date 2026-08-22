@@ -59,6 +59,9 @@ export const roomsApi = {
   getInvites: (roomId: string) =>
     client.get<RoomInvite[]>(`/rooms/${roomId}/invites`),
 
+  deactivateInvite: (token: string) =>
+    client.delete(`/invites/${token}`),
+
   acceptInvite: (token: string) =>
     client.post<Room>(`/invites/${token}/accept`),
 }
