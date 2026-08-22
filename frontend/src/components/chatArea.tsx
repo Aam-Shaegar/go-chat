@@ -7,7 +7,7 @@ import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
 import { roomsApi, dmApi } from '../api/rooms'
-import type { Message, MessageReaction, RoomMember } from '../types'
+import type { Message, MessageReaction, RoomMember, RoomInvite } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
@@ -36,7 +36,9 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const [composerError, setComposerError] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
+  const [showInviteTokensModal, setShowInviteTokensModal] = useState(false)
   const [members, setMembers] = useState<RoomMember[]>([])
+  const [invites, setInvites] = useState<RoomInvite[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const lastRenderedMessageId = useRef<string | null>(null)
@@ -234,16 +236,21 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     if (!activeRoomId) return
     setMembersLoading(true)
     try {
-      const membersRes = await roomsApi.getMembers(activeRoomId)
+      const [membersRes, invitesRes] = await Promise.all([
+        roomsApi.getMembers(activeRoomId),
+        (currentUserRole === 'owner' || currentUserRole === 'admin') ? roomsApi.getInvites(activeRoomId) : Promise.resolve({ data: [] as RoomInvite[] }),
+      ])
       setMembers(membersRes.data ?? [])
+      setInvites(invitesRes.data ?? [])
     } catch (error) {
       console.error('Failed to load members:', error)
       setMembers([])
+      setInvites([])
     } finally {
       setMembersLoading(false)
       setShowMembersModal(true)
     }
-  }, [activeRoomId])
+  }, [activeRoomId, currentUserRole])
 
   useEffect(() => {
     if (!lastMessage) return
@@ -519,7 +526,18 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
           currentUserId={user?.id ?? ''}
           roomId={activeRoomId ?? ''}
           onContextMenu={handleContextMenu}
+          invites={invites}
+          currentUserRole={currentUserRole}
+          onOpenInviteTokens={() => setShowInviteTokensModal(true)}
         />
+
+        {showInviteTokensModal && (
+          <InviteTokensModal
+            onClose={() => setShowInviteTokensModal(false)}
+            invites={invites}
+            roomId={activeRoomId ?? ''}
+          />
+        )}
 
         {contextMenu && (
           <div
@@ -1103,7 +1121,7 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
-function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu }: {
+function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu, invites, currentUserRole, onOpenInviteTokens }: {
   isOpen: boolean
   onClose: () => void
   members: RoomMember[]
@@ -1112,6 +1130,9 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   currentUserId: string
   roomId: string
   onContextMenu?: (e: React.MouseEvent, member: RoomMember) => void
+  invites: RoomInvite[]
+  currentUserRole: string
+  onOpenInviteTokens: () => void
 }) {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') onClose()
@@ -1148,19 +1169,32 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
 
   if (!isOpen) return null
 
+  const isAdminOrOwner = currentUserRole === 'owner' || currentUserRole === 'admin'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
           <h3 className="text-sm font-semibold text-slate-950">{isDM ? 'Participants' : 'Members'}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            <Icon name="close" className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdminOrOwner && (
+              <button
+                type="button"
+                onClick={onOpenInviteTokens}
+                className="h-8 px-3 rounded-full bg-slate-100 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+              >
+                Invite tokens
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Icon name="close" className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
@@ -1234,6 +1268,112 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
       </ul>
     )
   }
+}
+
+function InviteTokensModal({ onClose, invites, roomId }: {
+  onClose: () => void
+  invites: RoomInvite[]
+  roomId: string
+}) {
+  const [deactivating, setDeactivating] = useState<string | null>(null)
+
+  const handleDeactivate = async (token: string) => {
+    if (!confirm('Deactivate this invite token?')) return
+    setDeactivating(token)
+    try {
+      await roomsApi.deactivateInvite(token)
+      onClose()
+    } catch (error) {
+      console.error('Failed to deactivate invite:', error)
+      alert('Failed to deactivate invite')
+    } finally {
+      setDeactivating(null)
+    }
+  }
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
+          <h3 className="text-sm font-semibold text-slate-950">Invite tokens</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-5">
+          {invites.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-500">No invite tokens</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="pb-3 px-3">Token</th>
+                    <th className="pb-3 px-3">Created by</th>
+                    <th className="pb-3 px-3 text-right">Uses / Max</th>
+                    <th className="pb-3 px-3 text-right">Remaining</th>
+                    <th className="pb-3 px-3">Created at</th>
+                    <th className="pb-3 px-3">Expires at</th>
+                    <th className="pb-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.map((invite) => (
+                    <tr key={invite.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-3">
+                        <code className="break-all font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200">{invite.token}</code>
+                      </td>
+                      <td className="py-3 px-3 text-slate-700">{invite.created_by}</td>
+                      <td className="py-3 px-3 text-right text-slate-700">
+                        {invite.uses} / {invite.max_uses === 0 ? '∞' : invite.max_uses}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          invite.max_uses === 0 ? 'bg-green-100 text-green-700' :
+                          invite.max_uses - invite.uses > 0 ? 'bg-[#229ed9] text-white' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {invite.max_uses === 0 ? 'Unlimited' : invite.max_uses - invite.uses}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-700">{new Date(invite.created_at).toLocaleString()}</td>
+                      <td className="py-3 px-3 text-slate-700">
+                        {invite.expires_at ? new Date(invite.expires_at).toLocaleString() : 'Never'}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeactivate(invite.token)}
+                          disabled={deactivating === invite.token}
+                          className="h-8 px-3 rounded-full bg-red-50 text-red-600 text-sm font-medium transition hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deactivating === invite.token ? 'Deactivating...' : 'Deactivate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function DateDivider({ value }: { value: string }) {
