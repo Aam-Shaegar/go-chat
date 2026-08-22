@@ -398,14 +398,35 @@ func (s *WSService) PublishUserKicked(ctx context.Context, roomID, targetUserID,
 	event := ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserLeft,
 		Payload: ws_domain.UserLeftPayload{
-			RoomID:     roomID,
-			UserID:     targetUserID,
-			Username:   targetUsername,
-			KickedBy:   kickedBy,
-			KickedByName: kickedByName,
+			RoomID:        roomID,
+			UserID:        targetUserID,
+			Username:      targetUsername,
+			KickedBy:      kickedBy,
+			KickedByName:  kickedByName,
 		},
 	}
-	return s.publishRoomEvent(ctx, roomID, event, nil)
+	// Publish to room channel (for other members)
+	if err := s.hub.Publish(ctx, roomID, event); err != nil {
+		return err
+	}
+	// Publish directly to kicked user's channel (they're no longer in room members)
+	if err := s.hub.PublishToUser(ctx, targetUserID, event); err != nil {
+		return fmt.Errorf("publish to kicked user: %w", err)
+	}
+	// Publish to other members via user channels
+	userIDs, err := s.repo.GetRoomMemberIDs(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room members: %w", err)
+	}
+	for _, userID := range userIDs {
+		if userID == targetUserID {
+			continue // already sent above
+		}
+		if err := s.hub.PublishToUser(ctx, userID, event); err != nil {
+			return fmt.Errorf("publish to user: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *WSService) checkMuted(ctx context.Context, roomID, userID string) error {
