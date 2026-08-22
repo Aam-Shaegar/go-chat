@@ -45,6 +45,7 @@ type ServiceInterface interface {
 	OnConnect(client *ws_client.Client)
 	PublishUserMuted(ctx context.Context, roomID, targetUserID, targetUsername, mutedBy, mutedByName string, mutedUntil time.Time) error
 	PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error
+	PublishUserKicked(ctx context.Context, roomID, targetUserID, targetUsername, kickedBy, kickedByName string) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -316,7 +317,7 @@ func (s *WSService) OnClose(client *ws_client.Client) {
 	defer cancel()
 	_ = s.publishRoomEvent(ctx, client.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserLeft,
-		Payload: ws_domain.UserJoinedPayload{
+		Payload: ws_domain.UserLeftPayload{
 			RoomID:   client.RoomID,
 			UserID:   client.ID,
 			Username: client.Username,
@@ -388,6 +389,20 @@ func (s *WSService) PublishUserUnmuted(ctx context.Context, roomID, targetUserID
 			Username:      targetUsername,
 			UnmutedBy:     unmutedBy,
 			UnmutedByName: unmutedByName,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) PublishUserKicked(ctx context.Context, roomID, targetUserID, targetUsername, kickedBy, kickedByName string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserLeft,
+		Payload: ws_domain.UserLeftPayload{
+			RoomID:     roomID,
+			UserID:     targetUserID,
+			Username:   targetUsername,
+			KickedBy:   kickedBy,
+			KickedByName: kickedByName,
 		},
 	}
 	return s.publishRoomEvent(ctx, roomID, event, nil)

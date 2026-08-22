@@ -137,9 +137,17 @@ type UserMutedPayload struct {
 }
 
 type UserUnmutedPayload struct {
-	RoomID   string `json:"room_id"`
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
+	RoomID        string `json:"room_id"`
+	UserID        string `json:"user_id"`
+	Username      string `json:"username"`
 	UnmutedBy     string `json:"unmuted_by"`
 	UnmutedByName string `json:"unmuted_by_name"`
+}
+
+type UserLeftPayload struct {
+	RoomID        string `json:"room_id"`
+	UserID        string `json:"user_id"`
+	Username      string `json:"username"`
+	KickedBy      string `json:"kicked_by,omitempty"`
+	KickedByName  string `json:"kicked_by_name,omitempty"`
 }

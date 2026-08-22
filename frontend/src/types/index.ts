@@ -128,6 +128,8 @@ export interface UserLeftPayload {
   room_id: string
   user_id: string
   username: string
+  kicked_by?: string
+  kicked_by_name?: string
 }
 
 export interface UserMutedPayload {

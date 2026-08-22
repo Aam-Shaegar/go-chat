@@ -233,10 +233,30 @@ func (h *RoomsHandler) KickMember(w http.ResponseWriter, r *http.Request) {
 	roomID := r.PathValue("roomId")
 	targetID := r.PathValue("userId")
 
+	// Get target member info before kicking
+	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
+	if err != nil {
+		resp.ErrorResponse(err, "failed to get target member")
+		return
+	}
+
+	// Get requester member info
+	requesterMember, err := h.service.GetMember(ctx, roomID, userID)
+	if err != nil {
+		resp.ErrorResponse(err, "failed to get requester member")
+		return
+	}
+
 	if err := h.service.KickMember(ctx, roomID, userID, targetID); err != nil {
 		resp.ErrorResponse(err, "failed to kick member")
 		return
 	}
+
+	// Publish user_kicked event via WebSocket
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishUserKicked(ctx, roomID, targetID, targetMember.Username, userID, requesterMember.Username)
+	}
+
 	resp.NoContentResponse()
 }
 

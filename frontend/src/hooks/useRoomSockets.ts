@@ -99,7 +99,14 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
       }
       case 'user_left': {
         const p = event.payload as UserLeftPayload
-        if (p.user_id === auth.user?.id) break
+        if (p.user_id === auth.user?.id) {
+          // Current user was kicked or left - remove room from lists
+          chat.removeRoom(p.room_id)
+          if (chat.activeRoomId === p.room_id) {
+            chat.setActiveRoom(null)
+          }
+          break
+        }
         chat.setUserOffline(p.room_id, p.user_id)
         break
       }

@@ -23,6 +23,7 @@ interface ChatState {
   addDMName: (dmId: string, username: string) => void
   setActiveRoom: (roomId: string | null) => void
   addRoom: (room: Room) => void
+  removeRoom: (roomId: string) => void
 
   setMessages: (roomId: string, messages: Message[]) => void
   prependMessages: (roomId: string, messages: Message[]) => void
@@ -125,6 +126,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       [room.id]: room.last_message_at ?? room.created_at,
     },
   })),
+  removeRoom: (roomId) => set((s) => {
+    const isDM = s.dms.some((d) => d.id === roomId)
+    return {
+      rooms: s.rooms.filter((r) => r.id !== roomId),
+      dms: s.dms.filter((d) => d.id !== roomId),
+      messages: Object.fromEntries(Object.entries(s.messages).filter(([k]) => k !== roomId)),
+      lastMessages: Object.fromEntries(Object.entries(s.lastMessages).filter(([k]) => k !== roomId)),
+      roomActivity: Object.fromEntries(Object.entries(s.roomActivity).filter(([k]) => k !== roomId)),
+      unreadCounts: Object.fromEntries(Object.entries(s.unreadCounts).filter(([k]) => k !== roomId)),
+      typingUsers: Object.fromEntries(Object.entries(s.typingUsers).filter(([k]) => k !== roomId)),
+      connectionStates: Object.fromEntries(Object.entries(s.connectionStates).filter(([k]) => k !== roomId)),
+      presence: Object.fromEntries(Object.entries(s.presence).filter(([k]) => k !== roomId)),
+      mutedMembers: Object.fromEntries(Object.entries(s.mutedMembers).filter(([k]) => k !== roomId)),
+    }
+  }),
 
   setMessages: (roomId, messages) =>
     set((s) => {
