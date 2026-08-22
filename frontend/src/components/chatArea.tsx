@@ -38,6 +38,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [members, setMembers] = useState<RoomMember[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
+  const [invites, setInvites] = useState<RoomInvite[]>([])
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const lastRenderedMessageId = useRef<string | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
@@ -234,16 +235,21 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     if (!activeRoomId) return
     setMembersLoading(true)
     try {
-      const { data } = await roomsApi.getMembers(activeRoomId)
-      setMembers(data ?? [])
+      const [membersRes, invitesRes] = await Promise.all([
+        roomsApi.getMembers(activeRoomId),
+        (currentUserRole === 'owner' || currentUserRole === 'admin') ? roomsApi.getInvites(activeRoomId) : Promise.resolve({ data: [] as RoomInvite[] }),
+      ])
+      setMembers(membersRes.data ?? [])
+      setInvites(invitesRes.data ?? [])
     } catch (error) {
       console.error('Failed to load members:', error)
       setMembers([])
+      setInvites([])
     } finally {
       setMembersLoading(false)
       setShowMembersModal(true)
     }
-  }, [activeRoomId])
+  }, [activeRoomId, currentUserRole])
 
   useEffect(() => {
     if (!lastMessage) return
@@ -519,6 +525,8 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
           currentUserId={user?.id ?? ''}
           roomId={activeRoomId ?? ''}
           onContextMenu={handleContextMenu}
+          invites={invites}
+          currentUserRole={currentUserRole}
         />
 
         {contextMenu && (
@@ -1103,7 +1111,7 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
-function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu }: {
+function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu, invites, currentUserRole }: {
   isOpen: boolean
   onClose: () => void
   members: RoomMember[]
@@ -1112,6 +1120,8 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   currentUserId: string
   roomId: string
   onContextMenu?: (e: React.MouseEvent, member: RoomMember) => void
+  invites: RoomInvite[]
+  currentUserRole: string
 }) {
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') onClose()
@@ -1148,6 +1158,8 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
 
   if (!isOpen) return null
 
+  const isAdminOrOwner = currentUserRole === 'owner' || currentUserRole === 'admin'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
@@ -1164,59 +1176,21 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {loading ? (
-            <div className="py-10 text-center text-sm text-slate-500">Loading members...</div>
-          ) : members.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-500">No members</div>
+          {isAdminOrOwner && invites.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="lg:pr-3">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Members</h4>
+                {renderMembersList()}
+              </div>
+              <div className="lg:pl-3 border-l border-slate-100 lg:border-l">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Invite tokens</h4>
+                {renderInvitesList()}
+              </div>
+            </div>
           ) : (
-            <ul className="space-y-2" role="list">
-              {members.map((member) => (
-                onContextMenu && member.user_id !== currentUserId ? (
-                  <li
-                    key={member.user_id}
-                    className="flex items-center gap-3 relative"
-                    onContextMenu={(e) => onContextMenu(e, member)}
-                  >
-                    <ConversationAvatar name={member.username} isDM={isDM} compact />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
-                          {getRoleLabel(member.role)}
-                        </span>
-                        {isMuted(member.user_id) && (
-                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
-                            <Icon name="bell" className="h-3 w-3" />
-                            Muted
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ) : (
-                  <li
-                    key={member.user_id}
-                    className="flex items-center gap-3 relative"
-                  >
-                    <ConversationAvatar name={member.username} isDM={isDM} compact />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
-                          {getRoleLabel(member.role)}
-                        </span>
-                        {isMuted(member.user_id) && (
-                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
-                            <Icon name="bell" className="h-3 w-3" />
-                            Muted
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                )
-              ))}
-            </ul>
+            <div>
+              {renderMembersList()}
+            </div>
           )}
         </div>
 
@@ -1226,6 +1200,98 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
       </div>
     </div>
   )
+
+  function renderMembersList() {
+    if (loading) {
+      return <div className="py-10 text-center text-sm text-slate-500">Loading members...</div>
+    }
+    if (members.length === 0) {
+      return <div className="py-10 text-center text-sm text-slate-500">No members</div>
+    }
+    return (
+      <ul className="space-y-2" role="list">
+        {members.map((member) => (
+          onContextMenu && member.user_id !== currentUserId ? (
+            <li
+              key={member.user_id}
+              className="flex items-center gap-3 relative"
+              onContextMenu={(e) => onContextMenu(e, member)}
+            >
+              <ConversationAvatar name={member.username} isDM={isDM} compact />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                    {getRoleLabel(member.role)}
+                  </span>
+                  {isMuted(member.user_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
+                      <Icon name="bell" className="h-3 w-3" />
+                      Muted
+                    </span>
+                  )}
+                </div>
+              </div>
+            </li>
+          ) : (
+            <li
+              key={member.user_id}
+              className="flex items-center gap-3 relative"
+            >
+              <ConversationAvatar name={member.username} isDM={isDM} compact />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-slate-950">{member.username}</p>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${getRoleColor(member.role)}`}>
+                    {getRoleLabel(member.role)}
+                  </span>
+                  {isMuted(member.user_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-100 text-orange-700">
+                      <Icon name="bell" className="h-3 w-3" />
+                      Muted
+                    </span>
+                  )}
+                </div>
+              </div>
+            </li>
+          )
+        ))}
+      </ul>
+    )
+  }
+
+  function renderInvitesList() {
+    if (invites.length === 0) {
+      return <div className="py-10 text-center text-sm text-slate-500">No invite tokens</div>
+    }
+    return (
+      <ul className="space-y-3" role="list">
+        {invites.map((invite) => (
+          <li key={invite.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <code className="break-all text-sm font-mono text-slate-900 bg-white px-2 py-1 rounded border border-slate-200">{invite.token}</code>
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-[#229ed9] text-white">
+                    {invite.max_uses === 0 ? 'Unlimited' : `${invite.max_uses - invite.uses} / ${invite.max_uses} left`}
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                  <p>Created by: <span className="text-slate-700">{invite.created_by}</span></p>
+                  <p>Created: <span className="text-slate-700">{new Date(invite.created_at).toLocaleString()}</span></p>
+                  {invite.expires_at ? (
+                    <p>Expires: <span className="text-slate-700">{new Date(invite.expires_at).toLocaleString()}</span></p>
+                  ) : (
+                    <p>Expires: <span className="text-slate-700">Never</span></p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }
 }
 
 function DateDivider({ value }: { value: string }) {
