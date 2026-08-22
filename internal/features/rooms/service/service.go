@@ -41,5 +41,3 @@ type Repository interface {
 	DeactivateInvite(ctx context.Context, token, userID string) error
 	GetRoomInvites(ctx context.Context, roomID string) ([]domain_models.RoomInvite, error)
 }
-
-const defaultInviteTTL = 7 * 24 * time.Hour

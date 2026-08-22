@@ -993,24 +993,22 @@ function DeleteConfirmModal({ onConfirm, onCancel }: { onConfirm: () => void; on
 
 function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void }) {
   const [invite, setInvite] = useState<RoomInvite | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [maxUses, setMaxUses] = useState<number>(0)
+  const [ttlHours, setTtlHours] = useState<number | ''>('')
 
-  useEffect(() => {
-    let alive = true
-
-    roomsApi.createInvite(roomId, 10, 168)
-      .then(({ data }) => {
-        if (alive) setInvite(data)
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-
-    return () => {
-      alive = false
+  const handleCreate = async () => {
+    setLoading(true)
+    try {
+      const { data } = await roomsApi.createInvite(roomId, maxUses, ttlHours === '' ? undefined : ttlHours)
+      setInvite(data)
+    } catch {
+      setInvite(null)
+    } finally {
+      setLoading(false)
     }
-  }, [roomId])
+  }
 
   const handleCopy = async () => {
     if (!invite) return
@@ -1023,7 +1021,7 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h3 className="text-sm font-semibold text-slate-950">Invite link</h3>
+          <h3 className="text-sm font-semibold text-slate-950">Create invite</h3>
           <button
             type="button"
             onClick={onClose}
@@ -1035,16 +1033,53 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
         </div>
 
         <div className="space-y-4 p-5">
-          {loading ? (
-            <p className="text-center text-sm text-slate-500">Generating invite...</p>
-          ) : invite ? (
+          {!invite ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Max uses</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="0"
+                    value={maxUses}
+                    onChange={(e) => setMaxUses(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9]"
+                    placeholder="0 = unlimited"
+                  />
+                  <span className="text-sm text-slate-500">(0 = unlimited)</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Expires in (hours)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    value={ttlHours}
+                    onChange={(e) => setTtlHours(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-10 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9]"
+                    placeholder="Empty = never"
+                  />
+                  <span className="text-sm text-slate-500">(empty = never expires)</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={loading}
+                className="h-10 w-full rounded-full bg-[#229ed9] text-sm font-semibold text-white transition hover:bg-[#168ac0] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {loading ? 'Creating...' : 'Create invite'}
+              </button>
+            </div>
+          ) : (
             <>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <code className="break-all text-sm font-medium text-slate-900">{invite.token}</code>
               </div>
               <div className="text-xs text-slate-500">
-                <p>Max uses: {invite.max_uses}</p>
-                {invite.expires_at && <p>Expires: {new Date(invite.expires_at).toLocaleDateString()}</p>}
+                <p>Max uses: {invite.max_uses === 0 ? 'Unlimited' : invite.max_uses}</p>
+                {invite.expires_at ? <p>Expires: {new Date(invite.expires_at).toLocaleDateString()}</p> : <p>Never expires</p>}
               </div>
               <button
                 type="button"
@@ -1053,9 +1088,14 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
               >
                 {copied ? 'Copied' : 'Copy token'}
               </button>
+              <button
+                type="button"
+                onClick={() => setInvite(null)}
+                className="h-10 w-full rounded-full bg-slate-100 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+              >
+                Create another
+              </button>
             </>
-          ) : (
-            <p className="text-center text-sm text-red-600">Could not create invite</p>
           )}
         </div>
       </div>

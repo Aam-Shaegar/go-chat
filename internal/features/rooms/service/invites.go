@@ -26,18 +26,18 @@ func (s *RoomsService) CreateInvite(ctx context.Context, roomID, userID string, 
 		return domain_models.RoomInvite{}, fmt.Errorf("generate token: %w", err)
 	}
 
-	d := defaultInviteTTL
+	var expiresAt *time.Time
 	if ttl != nil {
-		d = *ttl
+		t := time.Now().Add(*ttl)
+		expiresAt = &t
 	}
-	t := time.Now().Add(d)
 
 	if maxUses < 0 {
-		maxUses = 1
+		maxUses = 0
 	}
 
 	return s.repo.CreateInvite(ctx, domain_models.NewRoomInvite(
-		"", roomID, token, userID, maxUses, &t, time.Now(),
+		"", roomID, token, userID, maxUses, expiresAt, time.Now(),
 	))
 }
 

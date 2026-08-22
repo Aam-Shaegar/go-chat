@@ -50,10 +50,10 @@ export const roomsApi = {
     client.get<{ unread: number }>(`/rooms/${id}/unread`),
 
   // Инвайты
-  createInvite: (roomId: string, maxUses = 1, ttlHours = 168) =>
+  createInvite: (roomId: string, maxUses = 0, ttlHours?: number) =>
     client.post<RoomInvite>(`/rooms/${roomId}/invites`, {
       max_uses: maxUses,
-      ttl_hours: ttlHours,
+      ttl_hours: ttlHours ?? null,
     }),
 
   getInvites: (roomId: string) =>
