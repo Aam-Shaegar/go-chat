@@ -1111,8 +1111,7 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
-function InviteTokensModal({ isOpen, onClose, invites, roomId }: {
-  isOpen: boolean
+function InviteTokensModal({ onClose, invites, roomId }: {
   onClose: () => void
   invites: RoomInvite[]
   roomId: string
@@ -1138,12 +1137,9 @@ function InviteTokensModal({ isOpen, onClose, invites, roomId }: {
   }, [onClose])
 
   useEffect(() => {
-    if (!isOpen) return
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, handleKeyDown])
-
-  if (!isOpen) return null
+  }, [handleKeyDown])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
@@ -1271,54 +1267,54 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   const isAdminOrOwner = currentUserRole === 'owner' || currentUserRole === 'admin'
   const [showInvitesModal, setShowInvitesModal] = useState(false)
 
+  // When invite tokens modal is open, hide the members modal content
+  if (showInvitesModal) {
+    return (
+      <InviteTokensModal
+        onClose={() => setShowInvitesModal(false)}
+        invites={invites}
+        roomId={roomId}
+      />
+    )
+  }
+
   return (
-    <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
-            <h3 className="text-sm font-semibold text-slate-950">{isDM ? 'Participants' : 'Members'}</h3>
-            <div className="flex items-center gap-2">
-              {isAdminOrOwner && (
-                <button
-                  type="button"
-                  onClick={() => setShowInvitesModal(true)}
-                  className="h-8 px-3 rounded-full bg-slate-100 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-                >
-                  Invite tokens
-                </button>
-              )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white z-10 rounded-t-2xl">
+          <h3 className="text-sm font-semibold text-slate-950">{isDM ? 'Participants' : 'Members'}</h3>
+          <div className="flex items-center gap-2">
+            {isAdminOrOwner && (
               <button
                 type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => setShowInvitesModal(true)}
+                className="h-8 px-3 rounded-full bg-slate-100 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
               >
-                <Icon name="close" className="h-4 w-4" />
+                Invite tokens
               </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5">
-            <div>
-              {renderMembersList()}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 px-5 py-3 sticky bottom-0 bg-white z-10 rounded-b-2xl">
-            <p className="text-center text-xs text-slate-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Icon name="close" className="h-4 w-4" />
+            </button>
           </div>
         </div>
-      </div>
 
-      {showInvitesModal && (
-        <InviteTokensModal
-          isOpen={showInvitesModal}
-          onClose={() => setShowInvitesModal(false)}
-          invites={invites}
-          roomId={roomId}
-        />
-      )}
-    </>
+        <div className="flex-1 overflow-y-auto p-5">
+          <div>
+            {renderMembersList()}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 px-5 py-3 sticky bottom-0 bg-white z-10 rounded-b-2xl">
+          <p className="text-center text-xs text-slate-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+        </div>
+      </div>
+    </div>
   )
 
   function renderMembersList() {
