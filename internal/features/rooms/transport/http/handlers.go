@@ -11,7 +11,6 @@ import (
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
 	core_http_request "go-chat/internal/core/transport/http/request"
 	core_http_response "go-chat/internal/core/transport/http/response"
-	ws_domain "go-chat/internal/features/ws/domain"
 )
 
 // Request/Response types
@@ -309,19 +308,9 @@ func (h *RoomsHandler) MuteMember(w http.ResponseWriter, r *http.Request) {
 			requesterName = requesterMember.Username
 		}
 
-		// Publish mute event via WebSocket
-		if h.hub != nil {
-			_ = h.hub.Publish(ctx, roomID, ws_domain.OutgoingEvent{
-				Type: ws_domain.EventTypeUserMuted,
-				Payload: ws_domain.UserMutedPayload{
-					RoomID:      roomID,
-					UserID:      targetID,
-					Username:    targetMember.Username,
-					MutedUntil:  mutedUntil,
-					MutedBy:     userID,
-					MutedByName: requesterName,
-				},
-			})
+		// Publish mute event via WebSocket service
+		if h.wsSvc != nil {
+			_ = h.wsSvc.PublishUserMuted(ctx, roomID, targetID, targetMember.Username, userID, requesterName, mutedUntil)
 		}
 	}
 
@@ -361,18 +350,9 @@ func (h *RoomsHandler) UnmuteMember(w http.ResponseWriter, r *http.Request) {
 		requesterName = requesterMember.Username
 	}
 
-	// Publish unmute event via WebSocket
-	if h.hub != nil {
-		_ = h.hub.Publish(ctx, roomID, ws_domain.OutgoingEvent{
-			Type: ws_domain.EventTypeUserUnmuted,
-			Payload: ws_domain.UserUnmutedPayload{
-				RoomID:        roomID,
-				UserID:        targetID,
-				Username:      targetMember.Username,
-				UnmutedBy:     userID,
-				UnmutedByName: requesterName,
-			},
-		})
+	// Publish unmute event via WebSocket service
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishUserUnmuted(ctx, roomID, targetID, targetMember.Username, userID, requesterName)
 	}
 
 	resp.NoContentResponse()

@@ -30,7 +30,7 @@ function useChatArea() {
 }
 
 export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
-  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom, isMemberMuted, getMutedUntil, syncMutedMembers } = useChatStore()
+  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom, isMemberMuted, getMutedUntil } = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
@@ -99,22 +99,19 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     const now = Date.now()
     const mutedUntil = new Date(now + minutes * 60 * 1000).toISOString()
     try {
-      const response = await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
+      await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
       setMuteModal({ member: null, isOpen: false })
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
       setMembers(data ?? [])
-      if (data) {
-        syncMutedMembers(activeRoomId, data)
-      }
     } catch (error) {
       console.error('Failed to mute member:', error)
       if (error instanceof Error) {
         alert('Failed to mute: ' + error.message)
       }
     }
-  }, [activeRoomId, muteModal.member, syncMutedMembers])
+  }, [activeRoomId, muteModal.member])
 
   const handleUnmute = useCallback(async (member: RoomMember) => {
     if (!activeRoomId) return
@@ -124,16 +121,13 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
       setMembers(data ?? [])
-      if (data) {
-        syncMutedMembers(activeRoomId, data)
-      }
     } catch (error) {
       console.error('Failed to unmute member:', error)
       if (error instanceof Error) {
         alert('Failed to unmute: ' + error.message)
       }
     }
-  }, [activeRoomId, syncMutedMembers])
+  }, [activeRoomId])
 
   const openMuteModal = useCallback((member: RoomMember) => {
     setMuteModal({ member, isOpen: true })
@@ -242,9 +236,6 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     try {
       const { data } = await roomsApi.getMembers(activeRoomId)
       setMembers(data ?? [])
-      if (data) {
-        syncMutedMembers(activeRoomId, data)
-      }
     } catch (error) {
       console.error('Failed to load members:', error)
       setMembers([])
@@ -252,7 +243,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       setMembersLoading(false)
       setShowMembersModal(true)
     }
-  }, [activeRoomId, syncMutedMembers])
+  }, [activeRoomId])
 
   useEffect(() => {
     if (!lastMessage) return

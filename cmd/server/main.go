@@ -109,7 +109,7 @@ func main() {
 	// HTTP Handlers
 	jwtHandler := jwt_transport_http.NewJwtHTTPHandler(jwtSvc, cfg.JwtRefreshTTL, cfg.SecureRefreshCookie)
 	usersHandler := users_transport_http.NewUsersHTTPHandler(usersSvc, cfg)
-	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc, hub)
+	roomsHandler := rooms_transport_http.NewRoomsHandler(roomsSvc, wsSvc)
 	wsHandler := ws_transport_http.NewWSHandler(wsSvc, hub, roomsRepo, jwtSvc, cfg.AllowedOrigins)
 	messagesHandler := messages_transport_http.NewMessagesHandler(messagesSvc)
 	readsHandler := reads_transport_http.NewReadsHandler(readSvc)

@@ -362,21 +362,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return get().mutedMembers[roomId]?.[userId]
   },
 
-  syncMutedMembers: (roomId: string, members: RoomMember[]) => {
-    set((s) => {
-      const mutedMembers = { ...s.mutedMembers }
-      if (!mutedMembers[roomId]) {
-        mutedMembers[roomId] = {}
-      }
-      for (const member of members) {
-        if (member.muted_until) {
-          mutedMembers[roomId][member.user_id] = member.muted_until
-        }
-      }
-      return { mutedMembers }
-    })
-  },
-
   getOnlineCount: (roomId, currentUserId) => {
     const roomPresence = get().presence[roomId]
     if (!roomPresence) return 0

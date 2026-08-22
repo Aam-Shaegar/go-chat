@@ -233,6 +233,14 @@ func TestHandle_EditMessage_Success(t *testing.T) {
 	}
 
 	updatedMsg := newTestMessage("msg-1", "room-1", "user-1", "edited", nil)
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("EditMessage", mock.Anything, "msg-1", "room-1", "user-1", "edited", mock.Anything).Return(updatedMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
@@ -278,6 +286,14 @@ func TestHandle_DeleteMessage_Success(t *testing.T) {
 	}
 
 	deletedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("DeleteMessage", mock.Anything, "msg-1", "room-1", "user-1", mock.Anything).Return(deletedMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
@@ -325,6 +341,14 @@ func TestHandle_AddReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("AddReaction", mock.Anything, "room-1", mock.MatchedBy(func(r domain_models.RawMessageReaction) bool {
 		return r.MessageID == "msg-1" && r.UserID == "user-1" && r.Emoji == "👍"
 	})).Return(reactionMsg, nil)
@@ -359,6 +383,14 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("RemoveReaction", mock.Anything, "msg-1", "room-1", "user-1").Return(reactionMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {

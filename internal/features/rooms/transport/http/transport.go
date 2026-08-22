@@ -8,12 +8,12 @@ import (
 	domain_models "go-chat/internal/core/domain/models"
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
 	core_http_server "go-chat/internal/core/transport/http/server"
-	ws_hub "go-chat/internal/features/ws/hub"
+	ws_service "go-chat/internal/features/ws/service"
 )
 
 type RoomsHandler struct {
 	service RoomsService
-	hub     ws_hub.HubInterface
+	wsSvc   ws_service.ServiceInterface
 }
 
 type RoomsService interface {
@@ -38,8 +38,8 @@ type RoomsService interface {
 	DeactivateInvite(ctx context.Context, token, userID string) error
 }
 
-func NewRoomsHandler(service RoomsService, hub ws_hub.HubInterface) *RoomsHandler {
-	return &RoomsHandler{service: service, hub: hub}
+func NewRoomsHandler(service RoomsService, wsSvc ws_service.ServiceInterface) *RoomsHandler {
+	return &RoomsHandler{service: service, wsSvc: wsSvc}
 }
 
 func (h *RoomsHandler) Routes(auth core_http_middleware.Middleware) []core_http_server.Route {

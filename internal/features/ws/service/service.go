@@ -43,6 +43,8 @@ type ServiceInterface interface {
 	Handle(client *ws_client.Client, event ws_domain.IncomingEvent)
 	OnClose(client *ws_client.Client)
 	OnConnect(client *ws_client.Client)
+	PublishUserMuted(ctx context.Context, roomID, targetUserID, targetUsername, mutedBy, mutedByName string, mutedUntil time.Time) error
+	PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -156,6 +158,10 @@ func (s *WSService) handleEditMessage(ctx context.Context, client *ws_client.Cli
 		return err
 	}
 
+	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	msg, err := s.repo.EditMessage(ctx, p.MessageID, roomID, client.ID, p.Content, time.Now())
 	if err != nil {
 		return fmt.Errorf("edit message: %w", err)
@@ -185,6 +191,10 @@ func (s *WSService) handleDeleteMessage(ctx context.Context, client *ws_client.C
 		return err
 	}
 
+	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	now := time.Now()
 	msg, err := s.repo.DeleteMessage(ctx, p.MessageID, roomID, client.ID, now)
 	if err != nil {
@@ -211,6 +221,10 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 	}
 	roomID, err := resolveRoomID(client, p.RoomID)
 	if err != nil {
+		return err
+	}
+
+	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
 		return err
 	}
 
@@ -246,6 +260,10 @@ func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.
 	}
 	roomID, err := resolveRoomID(client, p.RoomID)
 	if err != nil {
+		return err
+	}
+
+	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
 		return err
 	}
 
@@ -373,4 +391,15 @@ func (s *WSService) PublishUserUnmuted(ctx context.Context, roomID, targetUserID
 		},
 	}
 	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) checkMuted(ctx context.Context, roomID, userID string) error {
+	member, err := s.repo.GetMember(ctx, roomID, userID)
+	if err != nil {
+		return fmt.Errorf("get member: %w", err)
+	}
+	if member.IsMuted() {
+		return fmt.Errorf("you are muted in this room: %w", core_error.ErrUnauthorized)
+	}
+	return nil
 }

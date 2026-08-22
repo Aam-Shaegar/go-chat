@@ -119,6 +119,16 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
         // The error payload doesn't have enough info to know which reaction failed,
         // so we rely on the server not sending reaction_added/removed for failed operations
         console.warn('[WS] Server error:', p.message)
+
+        // Handle mute error - when muted user tries to send message
+        if (p.message.toLowerCase().includes('muted')) {
+          const activeRoomId = chat.activeRoomId
+          if (activeRoomId && auth.user?.id) {
+            // Mute until we get the actual user_muted event with the correct time
+            // Use a far future date as temporary mute
+            chat.setMemberMuted(activeRoomId, auth.user.id, new Date(Date.now() + 86400000).toISOString())
+          }
+        }
         break
       }
       default:
