@@ -99,19 +99,11 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     const now = Date.now()
     const mutedUntil = new Date(now + minutes * 60 * 1000).toISOString()
     try {
-      console.log('[DEBUG] Muting member:', muteModal.member.user_id, 'until:', mutedUntil)
       const response = await roomsApi.muteMember(activeRoomId, muteModal.member.user_id, mutedUntil)
-      console.log('[DEBUG] Mute response status:', response.status)
       setMuteModal({ member: null, isOpen: false })
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
-      console.log('[DEBUG] GetMembers raw response:', data)
-      if (data) {
-        data.forEach((m: RoomMember) => {
-          console.log('[DEBUG] Member:', m.username, 'muted_until:', m.muted_until)
-        })
-      }
       setMembers(data ?? [])
       if (data) {
         syncMutedMembers(activeRoomId, data)
@@ -127,18 +119,10 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const handleUnmute = useCallback(async (member: RoomMember) => {
     if (!activeRoomId) return
     try {
-      console.log('[DEBUG] Unmuting member:', member.user_id)
-      const response = await roomsApi.unmuteMember(activeRoomId, member.user_id)
-      console.log('[DEBUG] Unmute response status:', response.status)
+      await roomsApi.unmuteMember(activeRoomId, member.user_id)
       closeContextMenu()
       // Refresh members
       const { data } = await roomsApi.getMembers(activeRoomId)
-      console.log('[DEBUG] GetMembers raw response:', data)
-      if (data) {
-        data.forEach((m: RoomMember) => {
-          console.log('[DEBUG] Member:', m.username, 'muted_until:', m.muted_until)
-        })
-      }
       setMembers(data ?? [])
       if (data) {
         syncMutedMembers(activeRoomId, data)
@@ -224,8 +208,6 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   // Use store's mute status for real-time updates
   const isCurrentUserMuted = activeRoomId && user?.id ? isMemberMuted(activeRoomId, user.id) : false
   const currentUserMutedUntil = activeRoomId && user?.id ? getMutedUntil(activeRoomId, user.id) : undefined
-
-  console.log('[COMPONENT DEBUG] isCurrentUserMuted:', isCurrentUserMuted, 'currentUserMutedUntil:', currentUserMutedUntil, 'activeRoomId:', activeRoomId, 'userId:', user?.id)
 
   const isMuted = useCallback((member: RoomMember) => {
     if (!activeRoomId) return false
@@ -1130,9 +1112,7 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   const isMuted = useCallback((userId: string) => {
     if (!roomId) return false
     const store = useChatStore.getState()
-    const result = store.isMemberMuted(roomId, userId)
-    console.log('[MEMBERS MODAL DEBUG] isMuted:', userId, 'result:', result)
-    return result
+    return store.isMemberMuted(roomId, userId)
   }, [roomId])
 
   if (!isOpen) return null

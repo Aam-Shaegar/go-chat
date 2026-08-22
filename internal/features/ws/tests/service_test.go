@@ -125,6 +125,14 @@ func TestHandle_SendMessage_Success(t *testing.T) {
 	}
 
 	savedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("SaveMessage", mock.Anything, mock.Anything).Return(savedMsg, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
@@ -191,6 +199,14 @@ func TestHandle_SendMessage_RepoError(t *testing.T) {
 		Payload: raw,
 	}
 
+	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
+		RoomID:   "room-1",
+		UserID:   "user-1",
+		Username: "alice",
+		Role:     domain_models.MemberRoleMember,
+		JoinedAt: time.Now(),
+		MutedUntil: nil,
+	}, nil)
 	repo.On("SaveMessage", mock.Anything, mock.Anything).Return(domain_models.Message{}, errors.New("db error"))
 
 	svc.Handle(client, event)

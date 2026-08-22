@@ -354,9 +354,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   isMemberMuted: (roomId, userId) => {
     const mutedUntil = get().mutedMembers[roomId]?.[userId]
-    const result = mutedUntil ? new Date(mutedUntil) > new Date() : false
-    console.log('[STORE DEBUG] isMemberMuted:', roomId, userId, 'mutedUntil:', mutedUntil, 'result:', result)
-    return result
+    if (!mutedUntil) return false
+    return new Date(mutedUntil) > new Date()
   },
 
   getMutedUntil: (roomId, userId) => {

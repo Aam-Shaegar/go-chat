@@ -109,6 +109,15 @@ func (s *WSService) handleSendMessage(ctx context.Context, client *ws_client.Cli
 		return err
 	}
 
+	// Check if user is muted in this room
+	member, err := s.repo.GetMember(ctx, roomID, client.ID)
+	if err != nil {
+		return fmt.Errorf("get member: %w", err)
+	}
+	if member.IsMuted() {
+		return fmt.Errorf("you are muted in this room: %w", core_error.ErrUnauthorized)
+	}
+
 	now := time.Now()
 	msg, err := s.repo.SaveMessage(ctx, domain_models.NewMessage(
 		"", roomID, client.ID,
