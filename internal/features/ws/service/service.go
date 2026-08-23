@@ -47,6 +47,7 @@ type ServiceInterface interface {
 	PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error
 	PublishUserKicked(ctx context.Context, roomID, targetUserID, targetUsername, kickedBy, kickedByName string) error
 	PublishInviteDeactivated(ctx context.Context, roomID, token string) error
+	PublishInviteUsed(ctx context.Context, roomID, token string, uses, maxUses int) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -447,6 +448,19 @@ func (s *WSService) PublishInviteDeactivated(ctx context.Context, roomID, token 
 		Payload: ws_domain.InviteDeactivatedPayload{
 			RoomID: roomID,
 			Token:  token,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) PublishInviteUsed(ctx context.Context, roomID, token string, uses, maxUses int) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeInviteUsed,
+		Payload: ws_domain.InviteUsedPayload{
+			RoomID:  roomID,
+			Token:   token,
+			Uses:    uses,
+			MaxUses: maxUses,
 		},
 	}
 	return s.publishRoomEvent(ctx, roomID, event, nil)

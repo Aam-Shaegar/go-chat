@@ -16,19 +16,20 @@ const (
 	EventTypeRemoveReaction EventType = "remove_reaction"
 	EventTypeTyping         EventType = "typing"
 
-	// Сервер -> Клиент
-	EventTypeNewMessage      EventType = "new_message"
-	EventTypeMessageEdited   EventType = "message_edited"
-	EventTypeMessageDeleted  EventType = "message_deleted"
-	EventTypeReactionAdded   EventType = "reaction_added"
-	EventTypeReactionRemoved EventType = "reaction_removed"
-	EventTypeUserTyping      EventType = "user_typing"
-	EventTypeUserJoined      EventType = "user_joined"
-	EventTypeUserLeft        EventType = "user_left"
-	EventTypeUserMuted       EventType = "user_muted"
-	EventTypeUserUnmuted     EventType = "user_unmuted"
+// Сервер -> Клиент
+	EventTypeNewMessage        EventType = "new_message"
+	EventTypeMessageEdited     EventType = "message_edited"
+	EventTypeMessageDeleted    EventType = "message_deleted"
+	EventTypeReactionAdded     EventType = "reaction_added"
+	EventTypeReactionRemoved   EventType = "reaction_removed"
+	EventTypeUserTyping        EventType = "user_typing"
+	EventTypeUserJoined        EventType = "user_joined"
+	EventTypeUserLeft          EventType = "user_left"
+	EventTypeUserMuted         EventType = "user_muted"
+	EventTypeUserUnmuted       EventType = "user_unmuted"
 	EventTypeInviteDeactivated EventType = "invite_deactivated"
-	EventTypeError           EventType = "error"
+	EventTypeInviteUsed        EventType = "invite_used"
+	EventTypeError             EventType = "error"
 )
 
 // IncomingEvent - входящее событие от клиента
@@ -156,4 +157,11 @@ type UserLeftPayload struct {
 type InviteDeactivatedPayload struct {
 	RoomID string `json:"room_id"`
 	Token  string `json:"token"`
+}
+
+type InviteUsedPayload struct {
+	RoomID string `json:"room_id"`
+	Token  string `json:"token"`
+	Uses   int    `json:"uses"`
+	MaxUses int   `json:"max_uses"`
 }
