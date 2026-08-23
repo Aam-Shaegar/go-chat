@@ -57,6 +57,6 @@ func memberToDomain(m memberModel) domain_models.RoomMember {
 func inviteToDomain(m inviteModel) domain_models.RoomInvite {
 	return domain_models.NewRoomInvite(
 		m.ID, m.RoomID, m.Token, m.CreatedBy,
-		m.MaxUses, m.ExpiresAt, m.CreatedAt,
+		m.MaxUses, m.Uses, m.ExpiresAt, m.CreatedAt,
 	)
 }

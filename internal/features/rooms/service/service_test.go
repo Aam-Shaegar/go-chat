@@ -132,7 +132,7 @@ func newMember(userID string, role domain_models.MemberRole) domain_models.RoomM
 }
 
 func newInvite(uses, maxUses int, isActive bool, expiresAt *time.Time) domain_models.RoomInvite {
-	return domain_models.NewRoomInvite("invite-id", roomID, "token123", ownerID, maxUses, expiresAt, time.Now())
+	return domain_models.NewRoomInvite("invite-id", roomID, "token123", ownerID, maxUses, uses, expiresAt, time.Now())
 }
 
 func newService() (*rooms_service.RoomsService, *MockRepository) {

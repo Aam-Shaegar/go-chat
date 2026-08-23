@@ -37,7 +37,7 @@ func (s *RoomsService) CreateInvite(ctx context.Context, roomID, userID string, 
 	}
 
 	return s.repo.CreateInvite(ctx, domain_models.NewRoomInvite(
-		"", roomID, token, userID, maxUses, expiresAt, time.Now(),
+		"", roomID, token, userID, maxUses, 0, expiresAt, time.Now(),
 	))
 }
 

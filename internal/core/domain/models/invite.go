@@ -14,14 +14,14 @@ type RoomInvite struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
-func NewRoomInvite(id, roomID, token, createdBy string, maxUses int, expiresAt *time.Time, createdAt time.Time) RoomInvite {
+func NewRoomInvite(id, roomID, token, createdBy string, maxUses int, uses int, expiresAt *time.Time, createdAt time.Time) RoomInvite {
 	return RoomInvite{
 		ID:        id,
 		RoomID:    roomID,
 		Token:     token,
 		CreatedBy: createdBy,
 		MaxUses:   maxUses,
-		Uses:      0,
+		Uses:      uses,
 		IsActive:  true,
 		ExpiresAt: expiresAt,
 		CreatedAt: createdAt,
