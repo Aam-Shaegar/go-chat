@@ -67,6 +67,10 @@ func (s *RoomsService) GetRoomInvites(ctx context.Context, roomID, userID string
 	return s.repo.GetRoomInvites(ctx, roomID)
 }
 
+func (s *RoomsService) GetInviteByToken(ctx context.Context, token string) (domain_models.RoomInvite, error) {
+	return s.repo.GetInviteByToken(ctx, token)
+}
+
 func (s *RoomsService) DeactivateInvite(ctx context.Context, token, userID string) error {
 	return s.repo.DeactivateInvite(ctx, token, userID)
 }

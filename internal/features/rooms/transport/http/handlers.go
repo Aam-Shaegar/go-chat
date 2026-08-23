@@ -463,9 +463,24 @@ func (h *RoomsHandler) DeactivateInvite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	token := r.PathValue("token")
+
+	// Get room ID from invite before deactivating
+	invite, err := h.service.GetInviteByToken(ctx, token)
+	if err != nil {
+		resp.ErrorResponse(err, "invite not found")
+		return
+	}
+	roomID := invite.RoomID
+
 	if err := h.service.DeactivateInvite(ctx, token, userID); err != nil {
 		resp.ErrorResponse(err, "failed to deactivate invite")
 		return
 	}
+
+	// Publish invite deactivated event via WebSocket
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishInviteDeactivated(ctx, roomID, token)
+	}
+
 	resp.NoContentResponse()
 }

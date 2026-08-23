@@ -27,6 +27,7 @@ const (
 	EventTypeUserLeft        EventType = "user_left"
 	EventTypeUserMuted       EventType = "user_muted"
 	EventTypeUserUnmuted     EventType = "user_unmuted"
+	EventTypeInviteDeactivated EventType = "invite_deactivated"
 	EventTypeError           EventType = "error"
 )
 
@@ -150,4 +151,9 @@ type UserLeftPayload struct {
 	Username      string `json:"username"`
 	KickedBy      string `json:"kicked_by,omitempty"`
 	KickedByName  string `json:"kicked_by_name,omitempty"`
+}
+
+type InviteDeactivatedPayload struct {
+	RoomID string `json:"room_id"`
+	Token  string `json:"token"`
 }

@@ -138,14 +138,13 @@ func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string
 	return room, nil
 }
 
-// DeactivateInvite отключает инвайт. Может выполнить создатель инвайта или владелец комнаты.
+// DeactivateInvite удаляет инвайт. Может выполнить создатель инвайта или владелец комнаты.
 func (r *RoomsRepository) DeactivateInvite(ctx context.Context, token, userID string) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
 	query := `
-		UPDATE gochat.room_invites ri
-		SET is_active=false
+		DELETE FROM gochat.room_invites ri
 		WHERE ri.token=$1
 		  AND (
 		    ri.created_by=$2
@@ -157,7 +156,7 @@ func (r *RoomsRepository) DeactivateInvite(ctx context.Context, token, userID st
 	`
 	tag, err := r.pool.Exec(ctx, query, token, userID)
 	if err != nil {
-		return fmt.Errorf("deactivate invite: %w", err)
+		return fmt.Errorf("delete invite: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("invite not found or access denied: %w", core_postgres_pool.ErrNoRows)
@@ -170,10 +169,11 @@ func (r *RoomsRepository) GetRoomInvites(ctx context.Context, roomID string) ([]
 	defer cancel()
 
 	query := `
-		SELECT id, room_id, token, created_by, max_uses, uses, is_active, expires_at, created_at
-		FROM gochat.room_invites
-		WHERE room_id=$1
-		ORDER BY created_at DESC;
+		SELECT ri.id, ri.room_id, ri.token, u.username as created_by, ri.max_uses, ri.uses, ri.is_active, ri.expires_at, ri.created_at
+		FROM gochat.room_invites ri
+		JOIN gochat.users u ON u.id = ri.created_by
+		WHERE ri.room_id=$1
+		ORDER BY ri.created_at DESC;
 	`
 	rows, err := r.pool.Query(ctx, query, roomID)
 	if err != nil {

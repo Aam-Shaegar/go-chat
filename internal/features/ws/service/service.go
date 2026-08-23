@@ -46,6 +46,7 @@ type ServiceInterface interface {
 	PublishUserMuted(ctx context.Context, roomID, targetUserID, targetUsername, mutedBy, mutedByName string, mutedUntil time.Time) error
 	PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error
 	PublishUserKicked(ctx context.Context, roomID, targetUserID, targetUsername, kickedBy, kickedByName string) error
+	PublishInviteDeactivated(ctx context.Context, roomID, token string) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -438,4 +439,15 @@ func (s *WSService) checkMuted(ctx context.Context, roomID, userID string) error
 		return fmt.Errorf("you are muted in this room: %w", core_error.ErrUnauthorized)
 	}
 	return nil
+}
+
+func (s *WSService) PublishInviteDeactivated(ctx context.Context, roomID, token string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeInviteDeactivated,
+		Payload: ws_domain.InviteDeactivatedPayload{
+			RoomID: roomID,
+			Token:  token,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
 }

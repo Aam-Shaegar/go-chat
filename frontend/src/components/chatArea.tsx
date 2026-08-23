@@ -238,7 +238,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     try {
       const [membersRes, invitesRes] = await Promise.all([
         roomsApi.getMembers(activeRoomId),
-        (currentUserRole === 'owner' || currentUserRole === 'admin') ? roomsApi.getInvites(activeRoomId) : Promise.resolve({ data: [] as RoomInvite[] }),
+        roomsApi.getInvites(activeRoomId),
       ])
       setMembers(membersRes.data ?? [])
       setInvites(invitesRes.data ?? [])
@@ -250,7 +250,20 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       setMembersLoading(false)
       setShowMembersModal(true)
     }
-  }, [activeRoomId, currentUserRole])
+  }, [activeRoomId])
+
+  // Listen for invite deactivated events to refresh the list
+  useEffect(() => {
+    const handleInviteDeactivated = () => {
+      if (activeRoomId) {
+        roomsApi.getInvites(activeRoomId).then(({ data }) => {
+          setInvites(data ?? [])
+        })
+      }
+    }
+    window.addEventListener('gochat:invite_deactivated', handleInviteDeactivated)
+    return () => window.removeEventListener('gochat:invite_deactivated', handleInviteDeactivated)
+  }, [activeRoomId])
 
   useEffect(() => {
     if (!lastMessage) return

@@ -149,6 +149,11 @@ export interface UserUnmutedPayload {
   unmuted_by_name: string
 }
 
+export interface InviteDeactivatedPayload {
+  room_id: string
+  token: string
+}
+
 export interface ErrorPayload {
   message: string
 }
