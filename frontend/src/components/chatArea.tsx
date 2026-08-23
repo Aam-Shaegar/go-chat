@@ -1290,10 +1290,23 @@ function InviteTokensModal({ onClose, invites: initialInvites, roomId }: {
 }) {
   const [deactivating, setDeactivating] = useState<string | null>(null)
   const [invites, setInvites] = useState<RoomInvite[]>(initialInvites)
+  const [expandedTokens, setExpandedTokens] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setInvites(initialInvites)
   }, [initialInvites])
+
+  const toggleTokenExpand = (token: string) => {
+    setExpandedTokens(prev => {
+      const next = new Set(prev)
+      if (next.has(token)) {
+        next.delete(token)
+      } else {
+        next.add(token)
+      }
+      return next
+    })
+  }
 
   const handleDeactivate = async (token: string) => {
     if (!confirm('Deactivate this invite token?')) return
@@ -1356,7 +1369,20 @@ function InviteTokensModal({ onClose, invites: initialInvites, roomId }: {
                   {invites.map((invite) => (
                     <tr key={invite.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-3 min-w-[220px]">
-                        <code className="break-all font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200">{invite.token}</code>
+                        <span
+                          className="font-mono text-slate-900 cursor-pointer hover:text-slate-600"
+                          onClick={() => toggleTokenExpand(invite.token)}
+                          style={{
+                            display: 'inline-block',
+                            maxWidth: expandedTokens.has(invite.token) ? 'none' : '200px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            verticalAlign: 'middle',
+                          }}
+                        >
+                          {invite.token}
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-slate-700">{invite.created_by}</td>
                       <td className="py-3 px-3 text-right text-slate-700">
