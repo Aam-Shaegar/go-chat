@@ -236,12 +236,16 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     if (!activeRoomId) return
     setMembersLoading(true)
     try {
-      const [membersRes, invitesRes] = await Promise.all([
-        roomsApi.getMembers(activeRoomId),
-        roomsApi.getInvites(activeRoomId),
-      ])
+      const membersRes = await roomsApi.getMembers(activeRoomId)
       setMembers(membersRes.data ?? [])
-      setInvites(invitesRes.data ?? [])
+
+      // Fetch invites separately - don't fail members if invites fails (e.g., non-admin)
+      try {
+        const invitesRes = await roomsApi.getInvites(activeRoomId)
+        setInvites(invitesRes.data ?? [])
+      } catch {
+        setInvites([])
+      }
     } catch (error) {
       console.error('Failed to load members:', error)
       setMembers([])
