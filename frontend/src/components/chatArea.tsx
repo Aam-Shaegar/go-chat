@@ -1283,19 +1283,26 @@ function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, 
   }
 }
 
-function InviteTokensModal({ onClose, invites, roomId }: {
+function InviteTokensModal({ onClose, invites: initialInvites, roomId }: {
   onClose: () => void
   invites: RoomInvite[]
   roomId: string
 }) {
   const [deactivating, setDeactivating] = useState<string | null>(null)
+  const [invites, setInvites] = useState<RoomInvite[]>(initialInvites)
+
+  useEffect(() => {
+    setInvites(initialInvites)
+  }, [initialInvites])
 
   const handleDeactivate = async (token: string) => {
     if (!confirm('Deactivate this invite token?')) return
     setDeactivating(token)
     try {
       await roomsApi.deactivateInvite(token)
-      onClose()
+      // Refresh invites list after successful deactivation
+      const { data } = await roomsApi.getInvites(roomId)
+      setInvites(data ?? [])
     } catch (error) {
       console.error('Failed to deactivate invite:', error)
       alert('Failed to deactivate invite')
@@ -1336,7 +1343,7 @@ function InviteTokensModal({ onClose, invites, roomId }: {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="pb-3 px-3">Token</th>
+                    <th className="pb-3 px-3 min-w-[220px]">Token</th>
                     <th className="pb-3 px-3">Created by</th>
                     <th className="pb-3 px-3 text-right">Uses / Max</th>
                     <th className="pb-3 px-3 text-right">Remaining</th>
@@ -1348,7 +1355,7 @@ function InviteTokensModal({ onClose, invites, roomId }: {
                 <tbody>
                   {invites.map((invite) => (
                     <tr key={invite.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-3 min-w-[220px]">
                         <code className="break-all font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200">{invite.token}</code>
                       </td>
                       <td className="py-3 px-3 text-slate-700">{invite.created_by}</td>
