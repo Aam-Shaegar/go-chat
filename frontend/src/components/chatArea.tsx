@@ -71,16 +71,27 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
 
   const handleOpenDM = useCallback(async (targetUserId: string) => {
     try {
-      const { data } = await dmApi.openDM(targetUserId)
-      addRoom(data)
-      setActiveRoom(data.id)
+      const { data: room } = await dmApi.openDM(targetUserId)
+      // Enrich DM with other user's name
+      try {
+        const { data: members } = await roomsApi.getMembers(room.id)
+        const other = members.find((member) => member.user_id !== user?.id)
+        if (other) {
+          room.name = other.username
+          room.other_user_id = other.user_id
+        }
+      } catch {
+        // If enrichment fails, keep original room
+      }
+      addRoom(room)
+      setActiveRoom(room.id)
       setShowMembersModal(false)
       setSidebarOpen?.(false)
       closeContextMenu()
     } catch (error) {
       console.error('Failed to open DM:', error)
     }
-  }, [addRoom, setActiveRoom, setSidebarOpen])
+  }, [addRoom, setActiveRoom, setSidebarOpen, user?.id])
 
   const handleKick = useCallback(async (member: RoomMember) => {
     if (!activeRoomId || !confirm(`Kick ${member.username} from this room?`)) return
