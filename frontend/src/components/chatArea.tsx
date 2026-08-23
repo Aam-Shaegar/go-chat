@@ -280,6 +280,19 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     return () => window.removeEventListener('gochat:invite_deactivated', handleInviteDeactivated)
   }, [activeRoomId])
 
+  // Listen for invite used events to refresh the list
+  useEffect(() => {
+    const handleInviteUsed = () => {
+      if (activeRoomId) {
+        roomsApi.getInvites(activeRoomId).then(({ data }) => {
+          setInvites(data ?? [])
+        })
+      }
+    }
+    window.addEventListener('gochat:invite_used', handleInviteUsed)
+    return () => window.removeEventListener('gochat:invite_used', handleInviteUsed)
+  }, [activeRoomId])
+
   useEffect(() => {
     if (!lastMessage) return
 

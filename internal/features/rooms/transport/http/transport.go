@@ -33,7 +33,7 @@ type RoomsService interface {
 	GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error)
 
 	CreateInvite(ctx context.Context, roomID, userID string, maxUses int, ttl *time.Duration) (domain_models.RoomInvite, error)
-	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error)
+	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error)
 	GetRoomInvites(ctx context.Context, roomID, userID string) ([]domain_models.RoomInvite, error)
 	GetInviteByToken(ctx context.Context, token string) (domain_models.RoomInvite, error)
 	DeactivateInvite(ctx context.Context, token, userID string) error

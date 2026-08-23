@@ -41,19 +41,19 @@ func (s *RoomsService) CreateInvite(ctx context.Context, roomID, userID string, 
 	))
 }
 
-func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
+func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error) {
 	if token == "" {
-		return domain_models.Room{}, fmt.Errorf("token is required: %w", core_error.ErrInvalidArgument)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("token is required: %w", core_error.ErrInvalidArgument)
 	}
 
-	room, err := s.repo.AcceptInvite(ctx, token, userID)
+	room, invite, err := s.repo.AcceptInvite(ctx, token, userID)
 	if err != nil {
 		if errors.Is(err, core_error.ErrConflict) {
-			return domain_models.Room{}, err
+			return domain_models.Room{}, domain_models.RoomInvite{}, err
 		}
-		return domain_models.Room{}, fmt.Errorf("invite expired, exhausted, inactive or already used: %w", core_error.ErrInvalidArgument)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("invite expired, exhausted, inactive or already used: %w", core_error.ErrInvalidArgument)
 	}
-	return room, nil
+	return room, invite, nil
 }
 
 func (s *RoomsService) GetRoomInvites(ctx context.Context, roomID, userID string) ([]domain_models.RoomInvite, error) {

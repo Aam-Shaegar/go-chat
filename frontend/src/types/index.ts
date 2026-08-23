@@ -154,6 +154,13 @@ export interface InviteDeactivatedPayload {
   token: string
 }
 
+export interface InviteUsedPayload {
+  room_id: string
+  token: string
+  uses: number
+  max_uses: number
+}
+
 export interface ErrorPayload {
   message: string
 }

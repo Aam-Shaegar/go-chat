@@ -37,7 +37,7 @@ type Repository interface {
 	CreateInvite(ctx context.Context, invite domain_models.RoomInvite) (domain_models.RoomInvite, error)
 	GetInviteByToken(ctx context.Context, token string) (domain_models.RoomInvite, error)
 	TryIncrementInviteUses(ctx context.Context, token string) error
-	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error)
+	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error)
 	DeactivateInvite(ctx context.Context, token, userID string) error
 	GetRoomInvites(ctx context.Context, roomID string) ([]domain_models.RoomInvite, error)
 }

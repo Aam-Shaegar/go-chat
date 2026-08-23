@@ -15,6 +15,7 @@ import type {
   UserTypingPayload,
   UserUnmutedPayload,
   InviteDeactivatedPayload,
+  InviteUsedPayload,
   WSEvent,
 } from '../types'
 
@@ -125,6 +126,12 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
         const p = event.payload as InviteDeactivatedPayload
         // Dispatch custom event for components to refresh invite lists
         window.dispatchEvent(new CustomEvent('gochat:invite_deactivated', { detail: p }))
+        break
+      }
+      case 'invite_used': {
+        const p = event.payload as InviteUsedPayload
+        // Dispatch custom event for components to refresh invite lists
+        window.dispatchEvent(new CustomEvent('gochat:invite_used', { detail: p }))
         break
       }
       case 'error': {

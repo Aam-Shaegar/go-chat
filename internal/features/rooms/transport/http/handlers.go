@@ -443,11 +443,17 @@ func (h *RoomsHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.PathValue("token")
-	room, err := h.service.AcceptInvite(ctx, token, userID)
+	room, invite, err := h.service.AcceptInvite(ctx, token, userID)
 	if err != nil {
 		resp.ErrorResponse(err, "failed to accept invite")
 		return
 	}
+
+	// Publish invite used event via WebSocket
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishInviteUsed(ctx, invite.RoomID, invite.Token, invite.Uses, invite.MaxUses)
+	}
+
 	resp.JSONResponse(room, http.StatusOK)
 }
 

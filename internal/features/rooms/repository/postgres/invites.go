@@ -70,18 +70,18 @@ func (r *RoomsRepository) TryIncrementInviteUses(ctx context.Context, token stri
 	return nil
 }
 
-func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
+func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return domain_models.Room{}, fmt.Errorf("begin tx: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	inviteQuery := `
-		SELECT room_id
+		SELECT room_id, max_uses, uses
 		FROM gochat.room_invites
 		WHERE token=$1
 		  AND is_active=true
@@ -90,23 +90,25 @@ func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string
 		FOR UPDATE;
 	`
 	var roomID string
-	if err := tx.QueryRow(ctx, inviteQuery, token).Scan(&roomID); err != nil {
-		return domain_models.Room{}, fmt.Errorf("invite not usable: %w", err)
+	var maxUses, uses int
+	if err := tx.QueryRow(ctx, inviteQuery, token).Scan(&roomID, &maxUses, &uses); err != nil {
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("invite not usable: %w", err)
 	}
 
 	memberQuery := `SELECT EXISTS(SELECT 1 FROM gochat.room_members WHERE room_id=$1 AND user_id=$2);`
 	var alreadyMember bool
 	if err := tx.QueryRow(ctx, memberQuery, roomID, userID).Scan(&alreadyMember); err != nil {
-		return domain_models.Room{}, fmt.Errorf("check membership: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("check membership: %w", err)
 	}
 	if alreadyMember {
-		return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
 	}
 
 	updateQuery := `UPDATE gochat.room_invites SET uses = uses + 1 WHERE token=$1;`
 	if _, err := tx.Exec(ctx, updateQuery, token); err != nil {
-		return domain_models.Room{}, fmt.Errorf("increment invite uses: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("increment invite uses: %w", err)
 	}
+	uses++
 
 	insertQuery := `
 		INSERT INTO gochat.room_members (room_id, user_id, role)
@@ -114,9 +116,9 @@ func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string
 	`
 	if _, err := tx.Exec(ctx, insertQuery, roomID, userID); err != nil {
 		if errors.Is(err, core_postgres_pool.ErrUniqueViolation) {
-			return domain_models.Room{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
+			return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("already a member: %w", core_error.ErrConflict)
 		}
-		return domain_models.Room{}, fmt.Errorf("insert member: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("insert member: %w", err)
 	}
 
 	roomQuery := `
@@ -129,13 +131,20 @@ func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string
 	`
 	room, err := scanRoom(tx.QueryRow(ctx, roomQuery, roomID))
 	if err != nil {
-		return domain_models.Room{}, fmt.Errorf("accept invite: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("accept invite: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return domain_models.Room{}, fmt.Errorf("commit tx: %w", err)
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("commit tx: %w", err)
 	}
-	return room, nil
+
+	invite := domain_models.RoomInvite{
+		Token:     token,
+		RoomID:    roomID,
+		MaxUses:   maxUses,
+		Uses:      uses,
+	}
+	return room, invite, nil
 }
 
 // DeactivateInvite удаляет инвайт. Может выполнить создатель инвайта или владелец комнаты.
