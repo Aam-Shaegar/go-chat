@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
 	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
+	core_logger "go-chat/internal/core/logger"
+
+	"go.uber.org/zap"
 )
 
 func (r *RoomsRepository) CreateInvite(ctx context.Context, invite domain_models.RoomInvite) (domain_models.RoomInvite, error) {
@@ -205,6 +209,65 @@ func (r *RoomsRepository) GetRoomInvites(ctx context.Context, roomID string) ([]
 	return invites, nil
 }
 
+func (r *RoomsRepository) cleanupExpiredInvites(ctx context.Context, log *core_logger.Logger) {
+	const batchSize = 1000
+	totalDeleted := int64(0)
+
+	for {
+		// Проверяем отмену контекста перед каждым батчем
+		if ctx.Err() != nil {
+			return
+		}
+
+		query := `
+			DELETE FROM gochat.room_invites
+			WHERE ctid IN (
+				SELECT ctid
+				FROM gochat.room_invites
+				WHERE is_active = false
+				   OR (max_uses > 0 AND uses >= max_uses)
+				   OR (expires_at IS NOT NULL AND expires_at < NOW())
+				LIMIT $1
+			)
+		`
+		tag, err := r.pool.Exec(ctx, query, batchSize)
+		if err != nil {
+			log.Error("invite cleanup: delete failed", zap.Error(err))
+			return
+		}
+
+		deleted := tag.RowsAffected()
+		totalDeleted += deleted
+
+		if deleted == 0 {
+			break // больше ничего удалять не нужно
+		}
+
+		log.Debug("invite cleanup: batch deleted", zap.Int64("count", deleted))
+	}
+
+	if totalDeleted > 0 {
+		log.Info("invite cleanup: completed", zap.Int64("total_deleted", totalDeleted))
+	}
+}
+
+// StartInviteCleanup запускает фоновую очистку просроченных/использованных инвайтов
+func (r *RoomsRepository) StartInviteCleanup(ctx context.Context, interval time.Duration, log *core_logger.Logger) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug("invite cleanup: stopping")
+			return
+		case <-ticker.C:
+			r.cleanupExpiredInvites(ctx, log)
+		}
+	}
+}
+
+// scanInvite сканирует строку в RoomInvite
 func scanInvite(row core_postgres_pool.Row) (domain_models.RoomInvite, error) {
 	var m inviteModel
 	err := row.Scan(&m.ID, &m.RoomID, &m.Token, &m.CreatedBy,

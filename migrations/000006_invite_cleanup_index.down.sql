@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS gochat.idx_room_invites_cleanup;
