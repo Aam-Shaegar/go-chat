@@ -75,15 +75,15 @@ func (s *RoomsService) UnbanMember(ctx context.Context, roomID, requesterID, tar
 		return fmt.Errorf("only admin or owner: %w", core_error.ErrUnauthorized)
 	}
 
-	target, err := s.repo.GetMember(ctx, roomID, targetUserID)
+	// Target is banned (not a member), so we can't check their role via GetMember.
+	// The hierarchy was already enforced at ban time. Allow unban if requester is admin/owner.
+	// We still check the ban exists to avoid silent no-op.
+	banned, err := s.repo.IsBanned(ctx, roomID, targetUserID)
 	if err != nil {
 		return err
 	}
-	if target.IsOwner() {
-		return fmt.Errorf("cannot unban owner: %w", core_error.ErrUnauthorized)
-	}
-	if target.Role == domain_models.MemberRoleAdmin && !requester.IsOwner() {
-		return fmt.Errorf("only owner can unban admins: %w", core_error.ErrUnauthorized)
+	if !banned {
+		return fmt.Errorf("user is not banned: %w", core_error.ErrNotFound)
 	}
 
 	return s.repo.RemoveBan(ctx, roomID, targetUserID)

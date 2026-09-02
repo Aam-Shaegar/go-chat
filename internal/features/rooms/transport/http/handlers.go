@@ -559,12 +559,20 @@ func (h *RoomsHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
 	roomID := r.PathValue("roomId")
 	targetID := r.PathValue("userId")
 
-	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
-	if err != nil {
-		resp.ErrorResponse(err, "target member not found")
-		return
-	}
+	// Get requester info for WS event
 	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+	// Get ban info for target username
+	bans, _ := h.service.GetRoomBans(ctx, roomID, userID)
+	var targetUsername string
+	for _, ban := range bans {
+		if ban.UserID == targetID {
+			targetUsername = ban.Username
+			break
+		}
+	}
+	if targetUsername == "" {
+		targetUsername = targetID
+	}
 
 	if err := h.service.UnbanMember(ctx, roomID, userID, targetID); err != nil {
 		resp.ErrorResponse(err, "failed to unban member")
@@ -572,7 +580,7 @@ func (h *RoomsHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.wsSvc != nil {
-		_ = h.wsSvc.PublishUserUnbanned(ctx, roomID, targetID, targetMember.Username, userID, requesterMember.Username)
+		_ = h.wsSvc.PublishUserUnbanned(ctx, roomID, targetID, targetUsername, userID, requesterMember.Username)
 	}
 
 	resp.NoContentResponse()
