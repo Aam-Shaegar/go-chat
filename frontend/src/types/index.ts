@@ -67,7 +67,9 @@ export interface RoomInvite {
 export interface RoomBan {
   room_id: string
   user_id: string
+  username: string
   banned_by: string
+  banned_by_name: string
   reason?: string
   expires_at?: string
   created_at: string
