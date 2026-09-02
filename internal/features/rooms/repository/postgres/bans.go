@@ -74,7 +74,14 @@ func (r *RoomsRepository) GetRoomBans(ctx context.Context, roomID string) ([]dom
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
-	query := `SELECT room_id, user_id, banned_by, reason, expires_at, created_at FROM gochat.room_bans WHERE room_id=$1 ORDER BY created_at DESC;`
+	query := `
+		SELECT rb.room_id, rb.user_id, u.username, rb.banned_by, bu.username as banned_by_name, rb.reason, rb.expires_at, rb.created_at
+		FROM gochat.room_bans rb
+		JOIN gochat.users u ON u.id = rb.user_id
+		JOIN gochat.users bu ON bu.id = rb.banned_by
+		WHERE rb.room_id=$1
+		ORDER BY rb.created_at DESC;
+	`
 	rows, err := r.pool.Query(ctx, query, roomID)
 	if err != nil {
 		return nil, err
@@ -84,7 +91,7 @@ func (r *RoomsRepository) GetRoomBans(ctx context.Context, roomID string) ([]dom
 	var bans []domain_models.RoomBan
 	for rows.Next() {
 		var b banModel
-		if err := rows.Scan(&b.RoomID, &b.UserID, &b.BannedBy, &b.Reason, &b.ExpiresAt, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.RoomID, &b.UserID, &b.Username, &b.BannedBy, &b.BannedByName, &b.Reason, &b.ExpiresAt, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		bans = append(bans, banToDomain(b))
@@ -102,22 +109,26 @@ func (r *RoomsRepository) CleanExpiredBans(ctx context.Context) error {
 }
 
 type banModel struct {
-	RoomID    string
-	UserID    string
-	BannedBy  string
-	Reason    string
-	ExpiresAt *time.Time
-	CreatedAt time.Time
+	RoomID       string
+	UserID       string
+	Username     string
+	BannedBy     string
+	BannedByName string
+	Reason       string
+	ExpiresAt    *time.Time
+	CreatedAt    time.Time
 }
 
 func banToDomain(b banModel) domain_models.RoomBan {
 	return domain_models.RoomBan{
-		RoomID:    b.RoomID,
-		UserID:    b.UserID,
-		BannedBy:  b.BannedBy,
-		Reason:    b.Reason,
-		ExpiresAt: b.ExpiresAt,
-		CreatedAt: b.CreatedAt,
+		RoomID:        b.RoomID,
+		UserID:        b.UserID,
+		Username:      b.Username,
+		BannedBy:      b.BannedBy,
+		BannedByName:  b.BannedByName,
+		Reason:        b.Reason,
+		ExpiresAt:     b.ExpiresAt,
+		CreatedAt:     b.CreatedAt,
 	}
 }
 
