@@ -8,15 +8,12 @@ import (
 type EventType string
 
 const (
-	// Клиент -> Сервер
-	EventTypeSendMessage    EventType = "send_message"
-	EventTypeEditMessage    EventType = "edit_message"
-	EventTypeDeleteMessage  EventType = "delete_message"
-	EventTypeAddReaction    EventType = "add_reaction"
-	EventTypeRemoveReaction EventType = "remove_reaction"
-	EventTypeTyping         EventType = "typing"
-
-// Сервер -> Клиент
+	EventTypeSendMessage       EventType = "send_message"
+	EventTypeEditMessage       EventType = "edit_message"
+	EventTypeDeleteMessage     EventType = "delete_message"
+	EventTypeAddReaction       EventType = "add_reaction"
+	EventTypeRemoveReaction    EventType = "remove_reaction"
+	EventTypeTyping            EventType = "typing"
 	EventTypeNewMessage        EventType = "new_message"
 	EventTypeMessageEdited     EventType = "message_edited"
 	EventTypeMessageDeleted    EventType = "message_deleted"
@@ -30,21 +27,19 @@ const (
 	EventTypeInviteDeactivated EventType = "invite_deactivated"
 	EventTypeInviteUsed        EventType = "invite_used"
 	EventTypeError             EventType = "error"
+	EventTypeUserBanned        EventType = "user_banned"
+	EventTypeUserUnbanned      EventType = "user_unbanned"
 )
 
-// IncomingEvent - входящее событие от клиента
 type IncomingEvent struct {
 	Type    EventType       `json:"type"`
-	Payload json.RawMessage `json:"payload"` // json.RawMessage а не []byte - не кодируется в base64
+	Payload json.RawMessage `json:"payload"`
 }
 
-// OutgoingEvent - исходящее событие клиенту
 type OutgoingEvent struct {
 	Type    EventType `json:"type"`
 	Payload any       `json:"payload"`
 }
-
-// Payloads клиент -> сервер
 
 type SendMessagePayload struct {
 	RoomID    string  `json:"room_id,omitempty"`
@@ -79,8 +74,6 @@ type TypingPayload struct {
 	RoomID string `json:"room_id"`
 }
 
-// Payloads сервер -> клиент
-
 type NewMessagePayload struct {
 	ID          string    `json:"id"`
 	RoomID      string    `json:"room_id"`
@@ -106,11 +99,11 @@ type MessageDeletedPayload struct {
 }
 
 type ReactionPayload struct {
-	MessageID       string `json:"message_id"`
-	RoomID          string `json:"room_id"`
-	UserID          string `json:"user_id"`
-	Emoji           string `json:"emoji"`
-	IsReactedByMe   bool   `json:"is_reacted_by_me"`
+	MessageID     string `json:"message_id"`
+	RoomID        string `json:"room_id"`
+	UserID        string `json:"user_id"`
+	Emoji         string `json:"emoji"`
+	IsReactedByMe bool   `json:"is_reacted_by_me"`
 }
 
 type UserTypingPayload struct {
@@ -147,11 +140,11 @@ type UserUnmutedPayload struct {
 }
 
 type UserLeftPayload struct {
-	RoomID        string `json:"room_id"`
-	UserID        string `json:"user_id"`
-	Username      string `json:"username"`
-	KickedBy      string `json:"kicked_by,omitempty"`
-	KickedByName  string `json:"kicked_by_name,omitempty"`
+	RoomID       string `json:"room_id"`
+	UserID       string `json:"user_id"`
+	Username     string `json:"username"`
+	KickedBy     string `json:"kicked_by,omitempty"`
+	KickedByName string `json:"kicked_by_name,omitempty"`
 }
 
 type InviteDeactivatedPayload struct {
@@ -160,8 +153,26 @@ type InviteDeactivatedPayload struct {
 }
 
 type InviteUsedPayload struct {
-	RoomID string `json:"room_id"`
-	Token  string `json:"token"`
-	Uses   int    `json:"uses"`
-	MaxUses int   `json:"max_uses"`
+	RoomID  string `json:"room_id"`
+	Token   string `json:"token"`
+	Uses    int    `json:"uses"`
+	MaxUses int    `json:"max_uses"`
+}
+
+type UserBannedPayload struct {
+	RoomID       string     `json:"room_id"`
+	UserID       string     `json:"user_id"`
+	Username     string     `json:"username"`
+	BannedBy     string     `json:"banned_by"`
+	BannedByName string     `json:"banned_by_name"`
+	Reason       string     `json:"reason,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+}
+
+type UserUnbannedPayload struct {
+	RoomID         string `json:"room_id"`
+	UserID         string `json:"user_id"`
+	Username       string `json:"username"`
+	UnbannedBy     string `json:"unbanned_by"`
+	UnbannedByName string `json:"unbanned_by_name"`
 }

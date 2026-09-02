@@ -172,6 +172,9 @@ func main() {
 	// Фоновая горутина с очисткой просроченных инвайтов
 	go roomsRepo.StartInviteCleanup(ctx, 5*time.Minute, logger)
 
+	// Фоновая горутина с очисткой просроченных банов
+	go roomsRepo.StartBanCleanup(ctx, 1*time.Hour, logger)
+
 	if err := httpServer.Run(ctx); err != nil {
 		logger.Error("HTTP server run error", zap.Error(err))
 	}

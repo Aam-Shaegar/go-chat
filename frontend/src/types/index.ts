@@ -64,6 +64,15 @@ export interface RoomInvite {
   created_at: string
 }
 
+export interface RoomBan {
+  room_id: string
+  user_id: string
+  banned_by: string
+  reason?: string
+  expires_at?: string
+  created_at: string
+}
+
 export type WSEventType =
   | 'send_message'
   | 'edit_message'
@@ -81,6 +90,8 @@ export type WSEventType =
   | 'user_left'
   | 'user_muted'
   | 'user_unmuted'
+  | 'user_banned'
+  | 'user_unbanned'
   | 'error'
 
 export interface WSEvent<T = unknown> {
@@ -147,6 +158,24 @@ export interface UserUnmutedPayload {
   username: string
   unmuted_by: string
   unmuted_by_name: string
+}
+
+export interface UserBannedPayload {
+  room_id: string
+  user_id: string
+  username: string
+  banned_by: string
+  banned_by_name: string
+  reason?: string
+  expires_at?: string
+}
+
+export interface UserUnbannedPayload {
+  room_id: string
+  user_id: string
+  username: string
+  unbanned_by: string
+  unbanned_by_name: string
 }
 
 export interface InviteDeactivatedPayload {

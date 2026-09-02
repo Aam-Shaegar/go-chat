@@ -277,6 +277,16 @@ func (r *WSRepository) GetMember(ctx context.Context, roomID, userID string) (do
 	), nil
 }
 
+func (r *WSRepository) IsBanned(ctx context.Context, roomID, userID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	query := `SELECT EXISTS(SELECT 1 FROM gochat.room_bans WHERE room_id=$1 AND user_id=$2 AND (expires_at IS NULL OR expires_at > NOW()));`
+	var exists bool
+	err := r.pool.QueryRow(ctx, query, roomID, userID).Scan(&exists)
+	return exists, err
+}
+
 func scanMessage(row core_postgres_pool.Row) (domain_models.Message, error) {
 	var m domain_models.Message
 	err := row.Scan(

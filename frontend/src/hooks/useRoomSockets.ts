@@ -14,6 +14,8 @@ import type {
   UserMutedPayload,
   UserTypingPayload,
   UserUnmutedPayload,
+  UserBannedPayload,
+  UserUnbannedPayload,
   InviteDeactivatedPayload,
   InviteUsedPayload,
   WSEvent,
@@ -120,6 +122,27 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
       case 'user_unmuted': {
         const p = event.payload as UserUnmutedPayload
         chat.setMemberUnmuted(p.room_id, p.user_id)
+        break
+      }
+      case 'user_banned': {
+        const p = event.payload as UserBannedPayload
+        if (p.user_id === auth.user?.id) {
+          // Current user was banned - remove room from lists
+          chat.removeRoom(p.room_id)
+          if (chat.activeRoomId === p.room_id) {
+            chat.setActiveRoom(null)
+          }
+          // Show notification
+          alert(`You have been banned from ${p.room_id}${p.reason ? `: ${p.reason}` : ''}`)
+        }
+        chat.setUserOffline(p.room_id, p.user_id)
+        break
+      }
+      case 'user_unbanned': {
+        const p = event.payload as UserUnbannedPayload
+        // User was unbanned - they can now rejoin if they want
+        // Just ensure they're marked as offline (not in room)
+        chat.setUserOffline(p.room_id, p.user_id)
         break
       }
       case 'invite_deactivated': {

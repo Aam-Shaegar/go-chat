@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Room, Message } from '../types'
+import type { Room, Message, RoomMember } from '../types'
 
 export type RoomConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -16,6 +16,7 @@ interface ChatState {
   connectionStates: Record<string, RoomConnectionState>
   presence: Record<string, Set<string>>
   mutedMembers: Record<string, Record<string, string>>
+  bannedMembers: Record<string, Record<string, { expiresAt?: string; reason?: string }>>
 
   setRooms: (rooms: Room[]) => void
   setDMs: (dms: Room[]) => void
@@ -46,7 +47,10 @@ interface ChatState {
   setUserOffline: (roomId: string, userId: string) => void
   setMemberMuted: (roomId: string, userId: string, mutedUntil: string) => void
   setMemberUnmuted: (roomId: string, userId: string) => void
+  setMemberBanned: (roomId: string, userId: string, expiresAt?: string, reason?: string) => void
+  setMemberUnbanned: (roomId: string, userId: string) => void
   isMemberMuted: (roomId: string, userId: string) => boolean
+  isMemberBanned: (roomId: string, userId: string) => boolean
   getMutedUntil: (roomId: string, userId: string) => string | undefined
   syncMutedMembers: (roomId: string, members: RoomMember[]) => void
   getOnlineCount: (roomId: string, currentUserId?: string) => number
@@ -96,6 +100,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   connectionStates: {},
   presence: {},
   mutedMembers: {},
+  bannedMembers: {},
 
   setRooms: (rooms) =>
     set((s) => {
@@ -368,10 +373,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }),
 
+  setMemberBanned: (roomId, userId, expiresAt, reason) =>
+    set((s) => ({
+      bannedMembers: {
+        ...s.bannedMembers,
+        [roomId]: {
+          ...s.bannedMembers[roomId],
+          [userId]: { expiresAt, reason },
+        },
+      },
+    })),
+
+  setMemberUnbanned: (roomId, userId) =>
+    set((s) => {
+      const roomBanned = s.bannedMembers[roomId]
+      if (!roomBanned) return {}
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [userId]: _removed, ...rest } = roomBanned
+      return {
+        bannedMembers: {
+          ...s.bannedMembers,
+          [roomId]: rest,
+        },
+      }
+    }),
+
   isMemberMuted: (roomId, userId) => {
     const mutedUntil = get().mutedMembers[roomId]?.[userId]
     if (!mutedUntil) return false
     return new Date(mutedUntil) > new Date()
+  },
+
+  isMemberBanned: (roomId, userId) => {
+    const ban = get().bannedMembers[roomId]?.[userId]
+    if (!ban) return false
+    if (ban.expiresAt && new Date(ban.expiresAt) <= new Date()) return false
+    return true
   },
 
   getMutedUntil: (roomId, userId) => {
@@ -402,5 +439,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     typingUsers: {},
     connectionStates: {},
     mutedMembers: {},
+    bannedMembers: {},
   }),
 }))

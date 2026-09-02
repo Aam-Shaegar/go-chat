@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { Room, RoomMember, MessagesResponse, User, RoomInvite, Message } from '../types'
+import type { Room, RoomMember, MessagesResponse, User, RoomInvite, Message, RoomBan } from '../types'
 
 export const roomsApi = {
   getPublic: (limit = 20, offset = 0) =>
@@ -31,6 +31,15 @@ export const roomsApi = {
 
   unmuteMember: (roomId: string, userId: string) =>
     client.delete(`/rooms/${roomId}/members/${userId}/mute`),
+
+  banMember: (roomId: string, userId: string, reason?: string, expiresAt?: string) =>
+    client.post(`/rooms/${roomId}/members/${userId}/ban`, { reason, expires_at: expiresAt }),
+
+  unbanMember: (roomId: string, userId: string) =>
+    client.delete(`/rooms/${roomId}/members/${userId}/ban`),
+
+  getBans: (roomId: string) =>
+    client.get<RoomBan[]>(`/rooms/${roomId}/bans`),
 
   getMessages: (id: string, before?: string, limit = 50) =>
     client.get<MessagesResponse>(`/rooms/${id}/messages`, {

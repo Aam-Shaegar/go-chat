@@ -7,7 +7,7 @@ import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
 import { roomsApi, dmApi } from '../api/rooms'
-import type { Message, MessageReaction, RoomMember, RoomInvite } from '../types'
+import type { Message, MessageReaction, RoomMember, RoomInvite, RoomBan } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
@@ -30,7 +30,7 @@ function useChatArea() {
 }
 
 export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
-  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom, isMemberMuted, getMutedUntil } = useChatStore()
+  const { activeRoomId, rooms, dms, messages, clearUnread, typingUsers, unreadCounts, getOnlineCount, isUserOnline, updateMessage: storeUpdateMessage, addRoom, setActiveRoom, isMemberMuted, getMutedUntil, isMemberBanned } = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState('')
   const [composerError, setComposerError] = useState('')
@@ -56,6 +56,14 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     member: RoomMember | null
     isOpen: boolean
   }>({ member: null, isOpen: false })
+
+  // Ban modal state
+  const [banModal, setBanModal] = useState<{
+    member: RoomMember | null
+    isOpen: boolean
+    reason: string
+    expiresAt: string // ISO string
+  }>({ member: null, isOpen: false, reason: '', expiresAt: '' })
 
   const closeContextMenu = () => setContextMenu(null)
 
@@ -146,6 +154,47 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
     setMuteModal({ member, isOpen: true })
     closeContextMenu()
   }, [])
+
+  const openBanModal = useCallback((member: RoomMember) => {
+    setBanModal({ member, isOpen: true, reason: '', expiresAt: '' })
+    closeContextMenu()
+  }, [])
+
+  const handleBan = useCallback(async (reason: string, expiresAt: string) => {
+    if (!activeRoomId || !banModal.member) return
+    const member = banModal.member
+    if (!confirm(`Точно ли вы хотите забанить ${member.username}?${reason ? ` Причина: ${reason}` : ''}`)) return
+    try {
+      await roomsApi.banMember(activeRoomId, member.user_id, reason || undefined, expiresAt || undefined)
+      setBanModal({ member: null, isOpen: false, reason: '', expiresAt: '' })
+      closeContextMenu()
+      // Refresh members
+      const { data } = await roomsApi.getMembers(activeRoomId)
+      setMembers(data ?? [])
+    } catch (error) {
+      console.error('Failed to ban member:', error)
+      if (error instanceof Error) {
+        alert('Failed to ban: ' + error.message)
+      }
+    }
+  }, [activeRoomId, banModal.member])
+
+  const handleUnban = useCallback(async (member: RoomMember) => {
+    if (!activeRoomId) return
+    if (!confirm(`Unban ${member.username}? They will be able to rejoin.`)) return
+    try {
+      await roomsApi.unbanMember(activeRoomId, member.user_id)
+      closeContextMenu()
+      // Refresh members
+      const { data } = await roomsApi.getMembers(activeRoomId)
+      setMembers(data ?? [])
+    } catch (error) {
+      console.error('Failed to unban member:', error)
+      if (error instanceof Error) {
+        alert('Failed to unban: ' + error.message)
+      }
+    }
+  }, [activeRoomId])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, member: RoomMember) => {
     e.preventDefault()
@@ -596,7 +645,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
               Direct Message
             </button>
 
-            {canManage(contextMenu.member!.role) && (
+            {canManage(contextMenu.member!.role) && !room?.is_dm && (
               <>
                 <div className="border-t border-slate-100 my-1" />
 
@@ -610,6 +659,31 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
                     <Icon name="userMinus" className="h-4 w-4" />
                     Kick
                   </button>
+                )}
+
+                {/* Ban/Unban - works in all non-DM rooms */}
+                {!room?.is_dm && (
+                  <>
+                    {isMemberBanned(activeRoomId ?? '', contextMenu.member!.user_id) ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnban(contextMenu.member!)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-green-50"
+                      >
+                        <Icon name="userCheck" className="h-4 w-4" />
+                        Unban
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openBanModal(contextMenu.member!)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Icon name="userX" className="h-4 w-4" />
+                        Ban
+                      </button>
+                    )}
+                  </>
                 )}
 
                 {/* Mute/Unmute */}
@@ -666,6 +740,63 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
                     <span>{option.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ban Time Modal */}
+        {banModal.isOpen && banModal.member && (
+          <div
+            data-ban-modal
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4"
+          >
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <h3 className="text-sm font-semibold text-slate-950">Ban {banModal.member.username}</h3>
+                <button
+                  type="button"
+                  onClick={() => setBanModal({ member: null, isOpen: false, reason: '', expiresAt: '' })}
+                  aria-label="Close"
+                  className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                >
+                  <Icon name="close" className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Reason (optional)</label>
+                  <textarea
+                    value={banModal.reason}
+                    onChange={(e) => setBanModal(prev => ({ ...prev, reason: e.target.value }))}
+                    rows={3}
+                    maxLength={255}
+                    placeholder="Enter ban reason..."
+                    className="w-full h-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#229ed9] resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Expires in</label>
+                  <select
+                    value={banModal.expiresAt}
+                    onChange={(e) => setBanModal(prev => ({ ...prev, expiresAt: e.target.value }))}
+                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-[#229ed9]"
+                  >
+                    <option value="">Permanent</option>
+                    <option value={new Date(Date.now() + 60 * 60 * 1000).toISOString()}>1 hour</option>
+                    <option value={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()}>24 hours</option>
+                    <option value={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()}>7 days</option>
+                    <option value={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()}>30 days</option>
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">Leave empty for permanent ban</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleBan(banModal.reason, banModal.expiresAt)}
+                  className="h-10 w-full rounded-full bg-red-600 text-sm font-semibold text-white transition hover:bg-red-700"
+                >
+                  Ban {banModal.member.username}
+                </button>
               </div>
             </div>
           </div>
@@ -1478,7 +1609,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'bell' | 'bellOff'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'userCheck' | 'userX' | 'bell' | 'bellOff'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -1494,6 +1625,8 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     check: <path d="M20 6 9 17l-5-5" />,
     message: <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8zM17 9h-1v4h1v-4zm-4 0H9v4h4V9zm4 6H9v4h8v-4z" />,
     userMinus: <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 7h16" />,
+    userCheck: <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 7h16M22 11.08V12a10 10 0 1 0-5.94-9.14M9 11l3 3L22 4" />,
+    userX: <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 7h16M22 11.08V12a10 10 0 1 0-5.94-9.14M15 9l6 6M21 15l-6-6" />,
     bell: <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />,
     bellOff: <path d="M8.7 3.3a20.2 20.2 0 0 0 0 21.4M22.5 8.5a20.2 20.2 0 0 1-20.2 10.2M18 8a6 6 0 0 0-9.3 3.3m-4.7 5.7A6.1 6.1 0 0 0 14 18c0 7-3 7-3 9M10 21h4M1 1l22 22" />,
   }

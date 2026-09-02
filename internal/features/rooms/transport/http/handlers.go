@@ -34,6 +34,11 @@ type muteMemberRequest struct {
 	MutedUntil string `json:"muted_until" validate:"required"`
 }
 
+type banMemberRequest struct {
+	Reason     string  `json:"reason" validate:"max=255"`
+	ExpiresAt *string `json:"expires_at,omitempty"`
+}
+
 // Handlers
 
 func (h *RoomsHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
@@ -489,4 +494,108 @@ func (h *RoomsHandler) DeactivateInvite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) BanMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	targetID := r.PathValue("userId")
+
+	var req banMemberRequest
+	if err := core_http_request.DecodeAndValidateRequest(r, &req); err != nil {
+		resp.ErrorResponse(err, "invalid request")
+		return
+	}
+
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil {
+		t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
+		if err != nil {
+			resp.ErrorResponse(fmt.Errorf("invalid expires_at format, use RFC3339: %w", core_error.ErrInvalidArgument), "invalid request")
+			return
+		}
+		expiresAt = &t
+	}
+
+	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
+	if err != nil {
+		resp.ErrorResponse(err, "target member not found")
+		return
+	}
+	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+
+	if err := h.service.BanMember(ctx, roomID, userID, targetID, req.Reason, expiresAt); err != nil {
+		resp.ErrorResponse(err, "failed to ban member")
+		return
+	}
+
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishUserBanned(ctx, roomID, targetID, targetMember.Username, userID, requesterMember.Username, req.Reason, expiresAt)
+	}
+
+	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) UnbanMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	targetID := r.PathValue("userId")
+
+	targetMember, err := h.service.GetMember(ctx, roomID, targetID)
+	if err != nil {
+		resp.ErrorResponse(err, "target member not found")
+		return
+	}
+	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+
+	if err := h.service.UnbanMember(ctx, roomID, userID, targetID); err != nil {
+		resp.ErrorResponse(err, "failed to unban member")
+		return
+	}
+
+	if h.wsSvc != nil {
+		_ = h.wsSvc.PublishUserUnbanned(ctx, roomID, targetID, targetMember.Username, userID, requesterMember.Username)
+	}
+
+	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) GetBans(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+
+	bans, err := h.service.GetRoomBans(ctx, roomID, userID)
+	if err != nil {
+		resp.ErrorResponse(err, "failed to get bans")
+		return
+	}
+
+	resp.JSONResponse(bans, http.StatusOK)
 }

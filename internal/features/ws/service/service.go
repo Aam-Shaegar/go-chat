@@ -31,12 +31,14 @@ type Repository interface {
 	RemoveReaction(ctx context.Context, messageID, roomID, userID string) (domain_models.Message, error)
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
 	GetMember(ctx context.Context, roomID, userID string) (domain_models.RoomMember, error)
+	IsBanned(ctx context.Context, roomID, userID string) (bool, error)
 }
 
 type Hub interface {
 	Publish(ctx context.Context, roomID string, event ws_domain.OutgoingEvent) error
 	PublishToUser(ctx context.Context, userID string, event ws_domain.OutgoingEvent) error
 	Unregister(client *ws_client.Client)
+	ForceDisconnect(userID, roomID string)
 }
 
 type ServiceInterface interface {
@@ -46,6 +48,8 @@ type ServiceInterface interface {
 	PublishUserMuted(ctx context.Context, roomID, targetUserID, targetUsername, mutedBy, mutedByName string, mutedUntil time.Time) error
 	PublishUserUnmuted(ctx context.Context, roomID, targetUserID, targetUsername, unmutedBy, unmutedByName string) error
 	PublishUserKicked(ctx context.Context, roomID, targetUserID, targetUsername, kickedBy, kickedByName string) error
+	PublishUserBanned(ctx context.Context, roomID, targetUserID, targetUsername, bannedBy, bannedByName, reason string, expiresAt *time.Time) error
+	PublishUserUnbanned(ctx context.Context, roomID, targetUserID, targetUsername, unbannedBy, unbannedByName string) error
 	PublishInviteDeactivated(ctx context.Context, roomID, token string) error
 	PublishInviteUsed(ctx context.Context, roomID, token string, uses, maxUses int) error
 }
@@ -56,6 +60,16 @@ func (s *WSService) OnConnect(client *ws_client.Client) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+
+	if err := s.checkBanned(ctx, client.RoomID, client.ID); err != nil {
+		client.SendEvent(ws_domain.OutgoingEvent{
+			Type:    ws_domain.EventTypeError,
+			Payload: ws_domain.ErrorPayload{Message: err.Error()},
+		})
+		client.Close()
+		return
+	}
+
 	_ = s.publishRoomEvent(ctx, client.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserJoined,
 		Payload: ws_domain.UserJoinedPayload{
@@ -114,6 +128,10 @@ func (s *WSService) handleSendMessage(ctx context.Context, client *ws_client.Cli
 		return err
 	}
 
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	// Check if user is muted in this room
 	member, err := s.repo.GetMember(ctx, roomID, client.ID)
 	if err != nil {
@@ -161,6 +179,10 @@ func (s *WSService) handleEditMessage(ctx context.Context, client *ws_client.Cli
 		return err
 	}
 
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
 		return err
 	}
@@ -194,6 +216,10 @@ func (s *WSService) handleDeleteMessage(ctx context.Context, client *ws_client.C
 		return err
 	}
 
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
 		return err
 	}
@@ -224,6 +250,10 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 	}
 	roomID, err := resolveRoomID(client, p.RoomID)
 	if err != nil {
+		return err
+	}
+
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
 		return err
 	}
 
@@ -266,6 +296,10 @@ func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.
 		return err
 	}
 
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
+		return err
+	}
+
 	if err := s.checkMuted(ctx, roomID, client.ID); err != nil {
 		return err
 	}
@@ -296,6 +330,10 @@ func (s *WSService) handleTyping(ctx context.Context, client *ws_client.Client, 
 	}
 	roomID, err := resolveRoomID(client, p.RoomID)
 	if err != nil {
+		return err
+	}
+
+	if err := s.checkBanned(ctx, roomID, client.ID); err != nil {
 		return err
 	}
 
@@ -427,6 +465,71 @@ func (s *WSService) PublishUserKicked(ctx context.Context, roomID, targetUserID,
 		if err := s.hub.PublishToUser(ctx, userID, event); err != nil {
 			return fmt.Errorf("publish to user: %w", err)
 		}
+	}
+	return nil
+}
+
+func (s *WSService) PublishUserBanned(ctx context.Context, roomID, targetUserID, targetUsername, bannedBy, bannedByName, reason string, expiresAt *time.Time) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserBanned,
+		Payload: ws_domain.UserBannedPayload{
+			RoomID:        roomID,
+			UserID:        targetUserID,
+			Username:      targetUsername,
+			BannedBy:      bannedBy,
+			BannedByName:  bannedByName,
+			Reason:        reason,
+			ExpiresAt:     expiresAt,
+		},
+	}
+
+	if err := s.hub.Publish(ctx, roomID, event); err != nil {
+		return err
+	}
+
+	if err := s.hub.PublishToUser(ctx, targetUserID, event); err != nil {
+		return fmt.Errorf("publish to banned user: %w", err)
+	}
+
+	userIDs, err := s.repo.GetRoomMemberIDs(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room members: %w", err)
+	}
+	for _, uid := range userIDs {
+		if uid == targetUserID {
+			continue
+		}
+		if err := s.hub.PublishToUser(ctx, uid, event); err != nil {
+			return fmt.Errorf("publish to user: %w", err)
+		}
+	}
+
+	s.hub.ForceDisconnect(targetUserID, roomID)
+
+	return nil
+}
+
+func (s *WSService) PublishUserUnbanned(ctx context.Context, roomID, targetUserID, targetUsername, unbannedBy, unbannedByName string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserUnbanned,
+		Payload: ws_domain.UserUnbannedPayload{
+			RoomID:          roomID,
+			UserID:          targetUserID,
+			Username:        targetUsername,
+			UnbannedBy:      unbannedBy,
+			UnbannedByName:  unbannedByName,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) checkBanned(ctx context.Context, roomID, userID string) error {
+	banned, err := s.repo.IsBanned(ctx, roomID, userID)
+	if err != nil {
+		return err
+	}
+	if banned {
+		return fmt.Errorf("you are banned from this room: %w", core_error.ErrUnauthorized)
 	}
 	return nil
 }

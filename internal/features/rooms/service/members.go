@@ -22,6 +22,20 @@ func (s *RoomsService) JoinPublicRoom(ctx context.Context, roomID, userID string
 	if room.IsDM {
 		return fmt.Errorf("cannot join DM room directly: %w", core_error.ErrInvalidArgument)
 	}
+
+	banned, err := s.repo.IsBanned(ctx, roomID, userID)
+	if err != nil {
+		return fmt.Errorf("check ban: %w", err)
+	}
+	if banned {
+		ban, _ := s.repo.GetBan(ctx, roomID, userID)
+		if ban.IsExpired() {
+			_ = s.repo.RemoveBan(ctx, roomID, userID)
+		} else {
+			return fmt.Errorf("you are banned from this room: %w", core_error.ErrUnauthorized)
+		}
+	}
+
 	isMember, err := s.repo.IsMember(ctx, roomID, userID)
 	if err != nil {
 		return fmt.Errorf("check membership: %w", err)

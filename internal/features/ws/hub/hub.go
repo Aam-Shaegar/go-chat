@@ -36,6 +36,7 @@ type Logger interface {
 type HubInterface interface {
 	Publish(ctx context.Context, roomID string, event ws_domain.OutgoingEvent) error
 	PublishToUser(ctx context.Context, userID string, event ws_domain.OutgoingEvent) error
+	ForceDisconnect(userID, roomID string)
 }
 
 func NewHub(redisClient *redis.Client, log Logger) *Hub {
@@ -207,5 +208,16 @@ func (h *Hub) broadcastUser(userID string, event ws_domain.OutgoingEvent) {
 	}
 	for _, client := range clients {
 		client.SendEvent(event)
+	}
+}
+
+func (h *Hub) ForceDisconnect(userID, roomID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if clients, ok := h.rooms[roomID]; ok {
+		if client, ok := clients[userID]; ok {
+			client.Close()
+		}
 	}
 }

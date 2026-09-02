@@ -40,4 +40,12 @@ type Repository interface {
 	AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error)
 	DeactivateInvite(ctx context.Context, token, userID string) error
 	GetRoomInvites(ctx context.Context, roomID string) ([]domain_models.RoomInvite, error)
+
+	// Bans
+	CreateBan(ctx context.Context, ban domain_models.RoomBan) error
+	GetBan(ctx context.Context, roomID, userID string) (domain_models.RoomBan, error)
+	RemoveBan(ctx context.Context, roomID, userID string) error
+	GetRoomBans(ctx context.Context, roomID string) ([]domain_models.RoomBan, error)
+	IsBanned(ctx context.Context, roomID, userID string) (bool, error)
+	CleanExpiredBans(ctx context.Context) error
 }

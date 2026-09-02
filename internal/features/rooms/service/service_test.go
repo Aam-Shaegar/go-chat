@@ -99,9 +99,9 @@ func (m *MockRepository) TryIncrementInviteUses(ctx context.Context, token strin
 	return args.Error(0)
 }
 
-func (m *MockRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, error) {
+func (m *MockRepository) AcceptInvite(ctx context.Context, token, userID string) (domain_models.Room, domain_models.RoomInvite, error) {
 	args := m.Called(ctx, token, userID)
-	return args.Get(0).(domain_models.Room), args.Error(1)
+	return args.Get(0).(domain_models.Room), args.Get(1).(domain_models.RoomInvite), args.Error(2)
 }
 
 func (m *MockRepository) DeactivateInvite(ctx context.Context, token, userID string) error {
@@ -112,6 +112,36 @@ func (m *MockRepository) DeactivateInvite(ctx context.Context, token, userID str
 func (m *MockRepository) GetRoomInvites(ctx context.Context, roomID string) ([]domain_models.RoomInvite, error) {
 	args := m.Called(ctx, roomID)
 	return args.Get(0).([]domain_models.RoomInvite), args.Error(1)
+}
+
+func (m *MockRepository) CreateBan(ctx context.Context, ban domain_models.RoomBan) error {
+	args := m.Called(ctx, ban)
+	return args.Error(0)
+}
+
+func (m *MockRepository) GetBan(ctx context.Context, roomID, userID string) (domain_models.RoomBan, error) {
+	args := m.Called(ctx, roomID, userID)
+	return args.Get(0).(domain_models.RoomBan), args.Error(1)
+}
+
+func (m *MockRepository) RemoveBan(ctx context.Context, roomID, userID string) error {
+	args := m.Called(ctx, roomID, userID)
+	return args.Error(0)
+}
+
+func (m *MockRepository) GetRoomBans(ctx context.Context, roomID string) ([]domain_models.RoomBan, error) {
+	args := m.Called(ctx, roomID)
+	return args.Get(0).([]domain_models.RoomBan), args.Error(1)
+}
+
+func (m *MockRepository) IsBanned(ctx context.Context, roomID, userID string) (bool, error) {
+	args := m.Called(ctx, roomID, userID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockRepository) CleanExpiredBans(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
 // --- Хелперы ---
@@ -203,6 +233,7 @@ func TestJoinPublicRoom_Success(t *testing.T) {
 	room := newRoom(false)
 
 	repo.On("GetRoom", ctx, roomID).Return(room, nil)
+	repo.On("IsBanned", ctx, roomID, memberID).Return(false, nil)
 	repo.On("IsMember", ctx, roomID, memberID).Return(false, nil)
 	repo.On("AddMember", ctx, roomID, memberID, domain_models.MemberRoleMember).Return(nil)
 
@@ -231,6 +262,7 @@ func TestJoinPublicRoom_AlreadyMember(t *testing.T) {
 	room := newRoom(false)
 
 	repo.On("GetRoom", ctx, roomID).Return(room, nil)
+	repo.On("IsBanned", ctx, roomID, memberID).Return(false, nil)
 	repo.On("IsMember", ctx, roomID, memberID).Return(true, nil)
 
 	err := svc.JoinPublicRoom(ctx, roomID, memberID)
@@ -334,10 +366,12 @@ func TestAcceptInvite_Success(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 	room := newRoom(false)
+	invite := newInvite(0, 1, true, nil)
 
-	repo.On("AcceptInvite", ctx, "token123", memberID).Return(room, nil)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(room, invite, nil)
+	repo.On("IsBanned", ctx, roomID, memberID).Return(false, nil)
 
-	result, err := svc.AcceptInvite(ctx, "token123", memberID)
+	result, _, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, roomID, result.ID)
@@ -347,9 +381,9 @@ func TestAcceptInvite_AlreadyMember(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
-	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, core_error.ErrConflict)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, domain_models.RoomInvite{}, core_error.ErrConflict)
 
-	_, err := svc.AcceptInvite(ctx, "token123", memberID)
+	_, _, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.ErrorIs(t, err, core_error.ErrConflict)
 }
@@ -358,9 +392,9 @@ func TestAcceptInvite_Expired(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
-	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, assert.AnError)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, domain_models.RoomInvite{}, assert.AnError)
 
-	_, err := svc.AcceptInvite(ctx, "token123", memberID)
+	_, _, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.ErrorIs(t, err, core_error.ErrInvalidArgument)
 }
@@ -368,9 +402,9 @@ func TestAcceptInvite_Expired(t *testing.T) {
 func TestAcceptInvite_Inactive(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
-	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, assert.AnError)
+	repo.On("AcceptInvite", ctx, "token123", memberID).Return(domain_models.Room{}, domain_models.RoomInvite{}, assert.AnError)
 
-	_, err := svc.AcceptInvite(ctx, "token123", memberID)
+	_, _, err := svc.AcceptInvite(ctx, "token123", memberID)
 
 	assert.ErrorIs(t, err, core_error.ErrInvalidArgument)
 }

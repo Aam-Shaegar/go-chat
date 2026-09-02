@@ -37,6 +37,10 @@ type RoomsService interface {
 	GetRoomInvites(ctx context.Context, roomID, userID string) ([]domain_models.RoomInvite, error)
 	GetInviteByToken(ctx context.Context, token string) (domain_models.RoomInvite, error)
 	DeactivateInvite(ctx context.Context, token, userID string) error
+
+	BanMember(ctx context.Context, roomID, requesterID, targetUserID, reason string, expiresAt *time.Time) error
+	UnbanMember(ctx context.Context, roomID, requesterID, targetUserID string) error
+	GetRoomBans(ctx context.Context, roomID, userID string) ([]domain_models.RoomBan, error)
 }
 
 func NewRoomsHandler(service RoomsService, wsSvc ws_service.ServiceInterface) *RoomsHandler {
@@ -60,6 +64,9 @@ func (h *RoomsHandler) Routes(auth core_http_middleware.Middleware) []core_http_
 		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/role", Handler: h.UpdateMemberRole, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.MuteMember, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.UnmuteMember, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodPost, Path: "/rooms/{roomId}/members/{userId}/ban", Handler: h.BanMember, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}/ban", Handler: h.UnbanMember, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodGet, Path: "/rooms/{roomId}/bans", Handler: h.GetBans, Middleware: []core_http_middleware.Middleware{auth}},
 
 		// Invites
 		{Method: http.MethodPost, Path: "/rooms/{roomId}/invites", Handler: h.CreateInvite, Middleware: []core_http_middleware.Middleware{auth}},

@@ -53,6 +53,20 @@ func (s *RoomsService) AcceptInvite(ctx context.Context, token, userID string) (
 		}
 		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("invite expired, exhausted, inactive or already used: %w", core_error.ErrInvalidArgument)
 	}
+
+	banned, err := s.repo.IsBanned(ctx, room.ID, userID)
+	if err != nil {
+		return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("check ban: %w", err)
+	}
+	if banned {
+		ban, _ := s.repo.GetBan(ctx, room.ID, userID)
+		if ban.IsExpired() {
+			_ = s.repo.RemoveBan(ctx, room.ID, userID)
+		} else {
+			return domain_models.Room{}, domain_models.RoomInvite{}, fmt.Errorf("you are banned from this room: %w", core_error.ErrUnauthorized)
+		}
+	}
+
 	return room, invite, nil
 }
 

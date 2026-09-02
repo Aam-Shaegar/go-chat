@@ -58,6 +58,11 @@ func (m *MockRepository) GetMember(ctx context.Context, roomID, userID string) (
 	return args.Get(0).(domain_models.RoomMember), args.Error(1)
 }
 
+func (m *MockRepository) IsBanned(ctx context.Context, roomID, userID string) (bool, error) {
+	args := m.Called(ctx, roomID, userID)
+	return args.Bool(0), args.Error(1)
+}
+
 type MockHub struct {
 	mock.Mock
 }
@@ -74,6 +79,10 @@ func (m *MockHub) PublishToUser(ctx context.Context, userID string, event ws_dom
 
 func (m *MockHub) Unregister(client *ws_client.Client) {
 	m.Called(client)
+}
+
+func (m *MockHub) ForceDisconnect(userID, roomID string) {
+	m.Called(userID, roomID)
 }
 
 // --- Хелперы ---
@@ -125,6 +134,7 @@ func TestHandle_SendMessage_Success(t *testing.T) {
 	}
 
 	savedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -199,6 +209,7 @@ func TestHandle_SendMessage_RepoError(t *testing.T) {
 		Payload: raw,
 	}
 
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -233,6 +244,7 @@ func TestHandle_EditMessage_Success(t *testing.T) {
 	}
 
 	updatedMsg := newTestMessage("msg-1", "room-1", "user-1", "edited", nil)
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -286,6 +298,7 @@ func TestHandle_DeleteMessage_Success(t *testing.T) {
 	}
 
 	deletedMsg := newTestMessage("msg-1", "room-1", "user-1", "hello", nil)
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -341,6 +354,7 @@ func TestHandle_AddReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -383,6 +397,7 @@ func TestHandle_RemoveReaction_Success(t *testing.T) {
 	}
 
 	reactionMsg := newTestMessage("msg-1", "room-1", "user-2", "hello", nil)
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetMember", mock.Anything, "room-1", "user-1").Return(domain_models.RoomMember{
 		RoomID:   "room-1",
 		UserID:   "user-1",
@@ -419,6 +434,7 @@ func TestHandle_Typing_Success(t *testing.T) {
 		Payload: raw,
 	}
 
+	repo.On("IsBanned", mock.Anything, "room-1", "user-1").Return(false, nil)
 	repo.On("GetRoomMemberIDs", mock.Anything, "room-1").Return([]string{}, nil)
 	hub.On("Publish", mock.Anything, "room-1", mock.MatchedBy(func(e ws_domain.OutgoingEvent) bool {
 		return e.Type == ws_domain.EventTypeUserTyping &&
