@@ -38,6 +38,7 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [showInviteTokensModal, setShowInviteTokensModal] = useState(false)
   const [showBansListModal, setShowBansListModal] = useState(false)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [members, setMembers] = useState<RoomMember[]>([])
   const [invites, setInvites] = useState<RoomInvite[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -101,6 +102,23 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       console.error('Failed to open DM:', error)
     }
   }, [addRoom, setActiveRoom, setSidebarOpen, user?.id])
+
+  const handleLeave = useCallback(async () => {
+    if (!activeRoomId) return
+    if (!confirm('Leave this room? You will no longer have access to this chat and its history.')) return
+
+    try {
+      await roomsApi.leave(activeRoomId)
+      setShowLeaveModal(false)
+      // WebSocket will handle removing the room from lists via user_left event
+      // But we also handle it optimistically here for immediate feedback
+    } catch (error) {
+      console.error('Failed to leave room:', error)
+      if (error instanceof Error) {
+        alert('Failed to leave room: ' + error.message)
+      }
+    }
+  }, [activeRoomId])
 
   const handleKick = useCallback(async (member: RoomMember) => {
     if (!activeRoomId || !confirm(`Kick ${member.username} from this room?`)) return
@@ -491,6 +509,18 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
               <Icon name="link" className="h-5 w-5" />
             </button>
           )}
+
+          {(!room?.is_dm && !isOwner) && (
+            <button
+              type="button"
+              onClick={() => setShowLeaveModal(true)}
+              aria-label="Leave room"
+              title="Leave room"
+              className="grid h-10 w-10 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-red-600"
+            >
+              <Icon name="logOut" className="h-5 w-5" />
+            </button>
+          )}
         </header>
 
         <div
@@ -606,6 +636,15 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
 
         {showInviteModal && activeRoomId && (
           <InviteModal roomId={activeRoomId} onClose={() => setShowInviteModal(false)} />
+        )}
+
+        {showLeaveModal && activeRoomId && (
+          <LeaveModal
+            isOpen={showLeaveModal}
+            onClose={() => setShowLeaveModal(false)}
+            onConfirm={handleLeave}
+            roomName={room?.name || 'this room'}
+          />
         )}
 
         <MembersModal
@@ -1302,6 +1341,64 @@ function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void 
   )
 }
 
+function LeaveModal({ isOpen, onClose, onConfirm, roomName }: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  roomName: string
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-950">Leave room</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="text-center">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-red-50 text-red-600">
+              <Icon name="logOut" className="h-6 w-6" />
+            </div>
+            <p className="text-sm text-slate-700">
+              Are you sure you want to leave <span className="font-medium">{roomName}</span>?
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              You will lose access to this chat and its message history.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-full border border-slate-300 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="flex-1 h-10 rounded-full bg-red-600 text-sm font-semibold text-white transition hover:bg-red-700"
+            >
+              Leave room
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu, invites, currentUserRole, onOpenInviteTokens, onOpenBansList }: {
   isOpen: boolean
   onClose: () => void
@@ -1768,7 +1865,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'userCheck' | 'userX' | 'bell' | 'bellOff'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'userCheck' | 'userX' | 'bell' | 'bellOff' | 'logOut'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -1788,6 +1885,7 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     userX: <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 7h16M22 11.08V12a10 10 0 1 0-5.94-9.14M15 9l6 6M21 15l-6-6" />,
     bell: <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />,
     bellOff: <path d="M8.7 3.3a20.2 20.2 0 0 0 0 21.4M22.5 8.5a20.2 20.2 0 0 1-20.2 10.2M18 8a6 6 0 0 0-9.3 3.3m-4.7 5.7A6.1 6.1 0 0 0 14 18c0 7-3 7-3 9M10 21h4M1 1l22 22" />,
+    logOut: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   }
 
   return (

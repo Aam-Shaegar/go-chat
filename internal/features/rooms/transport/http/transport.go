@@ -41,6 +41,8 @@ type RoomsService interface {
 	BanMember(ctx context.Context, roomID, requesterID, targetUserID, reason string, expiresAt *time.Time) error
 	UnbanMember(ctx context.Context, roomID, requesterID, targetUserID string) error
 	GetRoomBans(ctx context.Context, roomID, userID string) ([]domain_models.RoomBan, error)
+
+	GetUser(ctx context.Context, userID string) (domain_models.User, error)
 }
 
 func NewRoomsHandler(service RoomsService, wsSvc ws_service.ServiceInterface) *RoomsHandler {

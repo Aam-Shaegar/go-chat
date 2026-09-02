@@ -11,6 +11,7 @@ import (
 	core_http_middleware "go-chat/internal/core/transport/http/middleware"
 	core_http_request "go-chat/internal/core/transport/http/request"
 	core_http_response "go-chat/internal/core/transport/http/response"
+	"go.uber.org/zap"
 )
 
 // Request/Response types
@@ -197,10 +198,22 @@ func (h *RoomsHandler) LeaveRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	roomID := r.PathValue("roomId")
+
+	user, err := h.service.GetUser(ctx, userID)
+	if err != nil {
+		resp.ErrorResponse(err, "failed to get user")
+		return
+	}
+
 	if err := h.service.LeaveRoom(ctx, roomID, userID); err != nil {
 		resp.ErrorResponse(err, "failed to leave room")
 		return
 	}
+
+	if err := h.wsSvc.PublishUserLeft(ctx, roomID, userID, user.Username); err != nil {
+		log.Error("failed to publish user left event", zap.Error(err), zap.String("room_id", roomID), zap.String("user_id", userID))
+	}
+
 	resp.NoContentResponse()
 }
 

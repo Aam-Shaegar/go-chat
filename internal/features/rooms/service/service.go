@@ -48,4 +48,6 @@ type Repository interface {
 	GetRoomBans(ctx context.Context, roomID string) ([]domain_models.RoomBan, error)
 	IsBanned(ctx context.Context, roomID, userID string) (bool, error)
 	CleanExpiredBans(ctx context.Context) error
+
+	GetUser(ctx context.Context, userID string) (domain_models.User, error)
 }

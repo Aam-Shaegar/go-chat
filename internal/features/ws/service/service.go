@@ -52,6 +52,7 @@ type ServiceInterface interface {
 	PublishUserUnbanned(ctx context.Context, roomID, targetUserID, targetUsername, unbannedBy, unbannedByName string) error
 	PublishInviteDeactivated(ctx context.Context, roomID, token string) error
 	PublishInviteUsed(ctx context.Context, roomID, token string, uses, maxUses int) error
+	PublishUserLeft(ctx context.Context, roomID, userID, username string) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -274,11 +275,11 @@ func (s *WSService) handleAddReaction(ctx context.Context, client *ws_client.Cli
 	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionAdded,
 		Payload: ws_domain.ReactionPayload{
-			MessageID:       p.MessageID,
-			RoomID:          msg.RoomID,
-			UserID:          client.ID,
-			Emoji:           p.Emoji,
-			IsReactedByMe:   true,
+			MessageID:     p.MessageID,
+			RoomID:        msg.RoomID,
+			UserID:        client.ID,
+			Emoji:         p.Emoji,
+			IsReactedByMe: true,
 		},
 	}, nil)
 }
@@ -312,11 +313,11 @@ func (s *WSService) handleRemoveReaction(ctx context.Context, client *ws_client.
 	return s.publishRoomEvent(ctx, msg.RoomID, ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeReactionRemoved,
 		Payload: ws_domain.ReactionPayload{
-			MessageID:       p.MessageID,
-			RoomID:          msg.RoomID,
-			UserID:          client.ID,
-			Emoji:           p.Emoji,
-			IsReactedByMe:   false,
+			MessageID:     p.MessageID,
+			RoomID:        msg.RoomID,
+			UserID:        client.ID,
+			Emoji:         p.Emoji,
+			IsReactedByMe: false,
 		},
 	}, nil)
 }
@@ -438,11 +439,11 @@ func (s *WSService) PublishUserKicked(ctx context.Context, roomID, targetUserID,
 	event := ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserLeft,
 		Payload: ws_domain.UserLeftPayload{
-			RoomID:        roomID,
-			UserID:        targetUserID,
-			Username:      targetUsername,
-			KickedBy:      kickedBy,
-			KickedByName:  kickedByName,
+			RoomID:       roomID,
+			UserID:       targetUserID,
+			Username:     targetUsername,
+			KickedBy:     kickedBy,
+			KickedByName: kickedByName,
 		},
 	}
 	// Publish to room channel (for other members)
@@ -473,13 +474,13 @@ func (s *WSService) PublishUserBanned(ctx context.Context, roomID, targetUserID,
 	event := ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserBanned,
 		Payload: ws_domain.UserBannedPayload{
-			RoomID:        roomID,
-			UserID:        targetUserID,
-			Username:      targetUsername,
-			BannedBy:      bannedBy,
-			BannedByName:  bannedByName,
-			Reason:        reason,
-			ExpiresAt:     expiresAt,
+			RoomID:       roomID,
+			UserID:       targetUserID,
+			Username:     targetUsername,
+			BannedBy:     bannedBy,
+			BannedByName: bannedByName,
+			Reason:       reason,
+			ExpiresAt:    expiresAt,
 		},
 	}
 
@@ -513,11 +514,11 @@ func (s *WSService) PublishUserUnbanned(ctx context.Context, roomID, targetUserI
 	event := ws_domain.OutgoingEvent{
 		Type: ws_domain.EventTypeUserUnbanned,
 		Payload: ws_domain.UserUnbannedPayload{
-			RoomID:          roomID,
-			UserID:          targetUserID,
-			Username:        targetUsername,
-			UnbannedBy:      unbannedBy,
-			UnbannedByName:  unbannedByName,
+			RoomID:         roomID,
+			UserID:         targetUserID,
+			Username:       targetUsername,
+			UnbannedBy:     unbannedBy,
+			UnbannedByName: unbannedByName,
 		},
 	}
 	return s.publishRoomEvent(ctx, roomID, event, nil)
@@ -567,4 +568,35 @@ func (s *WSService) PublishInviteUsed(ctx context.Context, roomID, token string,
 		},
 	}
 	return s.publishRoomEvent(ctx, roomID, event, nil)
+}
+
+func (s *WSService) PublishUserLeft(ctx context.Context, roomID, userID, username string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserLeft,
+		Payload: ws_domain.UserLeftPayload{
+			RoomID:   roomID,
+			UserID:   userID,
+			Username: username,
+		},
+	}
+	if err := s.hub.Publish(ctx, roomID, event); err != nil {
+		return err
+	}
+	if err := s.hub.PublishToUser(ctx, userID, event); err != nil {
+		return fmt.Errorf("publish to leaving user: %w", err)
+	}
+	userIDs, err := s.repo.GetRoomMemberIDs(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room members: %w", err)
+	}
+	for _, uid := range userIDs {
+		if uid == userID {
+			continue
+		}
+		if err := s.hub.PublishToUser(ctx, uid, event); err != nil {
+			return fmt.Errorf("publish to user %s: %w", uid, err)
+		}
+	}
+	s.hub.ForceDisconnect(userID, roomID)
+	return nil
 }

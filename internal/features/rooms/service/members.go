@@ -57,6 +57,9 @@ func (s *RoomsService) LeaveRoom(ctx context.Context, roomID, userID string) err
 	if err != nil {
 		return fmt.Errorf("get room: %w", err)
 	}
+	if room.IsDM {
+		return fmt.Errorf("cannot leave DM room: %w", core_error.ErrInvalidArgument)
+	}
 	if room.OwnerID == userID {
 		return fmt.Errorf("owner cannot leave room, delete it instead: %w", core_error.ErrInvalidArgument)
 	}

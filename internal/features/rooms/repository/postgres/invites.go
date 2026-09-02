@@ -8,8 +8,8 @@ import (
 
 	domain_models "go-chat/internal/core/domain/models"
 	core_error "go-chat/internal/core/errors"
-	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 	core_logger "go-chat/internal/core/logger"
+	core_postgres_pool "go-chat/internal/core/repository/postgres/pool"
 
 	"go.uber.org/zap"
 )
@@ -50,8 +50,6 @@ func (r *RoomsRepository) GetInviteByToken(ctx context.Context, token string) (d
 	return invite, nil
 }
 
-// TryIncrementInviteUses атомарно инкрементирует uses с проверкой лимита.
-// Возвращает ErrNoRows, если инвайт исчерпан, истёк или неактивен.
 func (r *RoomsRepository) TryIncrementInviteUses(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
@@ -143,15 +141,14 @@ func (r *RoomsRepository) AcceptInvite(ctx context.Context, token, userID string
 	}
 
 	invite := domain_models.RoomInvite{
-		Token:     token,
-		RoomID:    roomID,
-		MaxUses:   maxUses,
-		Uses:      uses,
+		Token:   token,
+		RoomID:  roomID,
+		MaxUses: maxUses,
+		Uses:    uses,
 	}
 	return room, invite, nil
 }
 
-// DeactivateInvite удаляет инвайт. Может выполнить создатель инвайта или владелец комнаты.
 func (r *RoomsRepository) DeactivateInvite(ctx context.Context, token, userID string) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()

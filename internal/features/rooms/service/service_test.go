@@ -144,6 +144,11 @@ func (m *MockRepository) CleanExpiredBans(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockRepository) GetUser(ctx context.Context, userID string) (domain_models.User, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).(domain_models.User), args.Error(1)
+}
+
 // --- Хелперы ---
 
 const (
