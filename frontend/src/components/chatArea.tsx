@@ -1452,7 +1452,7 @@ function LeaveModal({ isOpen, onClose, onConfirm, roomName }: {
   if (!isOpen) return null
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-sm font-semibold text-slate-950">Leave room</h3>
@@ -1516,7 +1516,7 @@ function RoleChangeModal({ isOpen, onClose, onConfirm, member, newRole }: {
   const color = isPromote ? 'blue' : 'amber'
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-sm font-semibold text-slate-950">Confirm {action}</h3>
@@ -1595,7 +1595,7 @@ function TransferOwnershipModal({ isOpen, onClose, onConfirm, targetUsername }: 
   if (!isOpen) return null
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h3 className="text-sm font-semibold text-slate-950">Transfer Ownership</h3>
