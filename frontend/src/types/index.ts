@@ -1,4 +1,4 @@
-export interface User {
+export type MemberRole = 'owner' | 'admin' | 'member'
   id: string
   username: string
   email: string
@@ -94,6 +94,7 @@ export type WSEventType =
   | 'user_unmuted'
   | 'user_banned'
   | 'user_unbanned'
+  | 'user_role_changed'
   | 'error'
 
 export interface WSEvent<T = unknown> {
@@ -209,4 +210,14 @@ export interface MessageReaction {
   count: number
   users: string[]
   isReactedByMe: boolean
+}
+
+export interface UserRoleChangedPayload {
+  room_id: string
+  user_id: string
+  username: string
+  old_role: MemberRole
+  new_role: MemberRole
+  changed_by: string
+  changed_by_name: string
 }

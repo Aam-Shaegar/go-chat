@@ -16,6 +16,7 @@ import type {
   UserUnmutedPayload,
   UserBannedPayload,
   UserUnbannedPayload,
+  UserRoleChangedPayload,
   InviteDeactivatedPayload,
   InviteUsedPayload,
   WSEvent,
@@ -143,6 +144,23 @@ export function useRoomSockets(rooms: Room[], dms: Room[]) {
         // User was unbanned - they can now rejoin if they want
         // Just ensure they're marked as offline (not in room)
         chat.setUserOffline(p.room_id, p.user_id)
+        break
+      }
+      case 'user_role_changed': {
+        const p = event.payload as UserRoleChangedPayload
+        // Update member role in store
+        chat.updateMemberRole(p.room_id, p.user_id, p.new_role)
+        
+        // Show toast/notification for current user
+        if (p.user_id === auth.user?.id) {
+          if (p.new_role === 'owner') {
+            console.log('You are now the owner of this room')
+          } else if (p.old_role === 'owner') {
+            console.log(`You transferred ownership to ${p.changed_by_name}`)
+          } else {
+            console.log(`Your role changed to ${p.new_role}`)
+          }
+        }
         break
       }
       case 'invite_deactivated': {

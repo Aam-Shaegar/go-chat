@@ -298,10 +298,59 @@ func (h *RoomsHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	targetMember, _ := h.service.GetMember(ctx, roomID, targetID)
+	oldRole := string(targetMember.Role)
+
 	if err := h.service.UpdateMemberRole(ctx, roomID, userID, targetID, domain_models.MemberRole(req.Role)); err != nil {
 		resp.ErrorResponse(err, "failed to update role")
 		return
 	}
+
+	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+	if err := h.wsSvc.PublishUserRoleChanged(ctx, roomID, targetID, targetMember.Username,
+		oldRole, req.Role, userID, requesterMember.Username); err != nil {
+		log.Error("failed to publish user role changed", zap.Error(err))
+	}
+
+	resp.NoContentResponse()
+}
+
+func (h *RoomsHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := core_logger.FromContext(ctx)
+	resp := core_http_response.NewHTTPResponseHandler(log, w)
+
+	userID, err := core_http_middleware.UserIDFromContext(ctx)
+	if err != nil {
+		resp.ErrorResponse(err, "unauthorized")
+		return
+	}
+
+	roomID := r.PathValue("roomId")
+	targetID := r.PathValue("userId")
+
+	var req struct {
+		Username string `json:"username" validate:"required"`
+	}
+	if err := core_http_request.DecodeAndValidateRequest(r, &req); err != nil {
+		resp.ErrorResponse(err, "invalid request")
+		return
+	}
+
+	targetMember, _ := h.service.GetMember(ctx, roomID, targetID)
+	oldRole := string(targetMember.Role)
+
+	if err := h.service.TransferOwnership(ctx, roomID, userID, targetID, req.Username); err != nil {
+		resp.ErrorResponse(err, "failed to transfer ownership")
+		return
+	}
+
+	requesterMember, _ := h.service.GetMember(ctx, roomID, userID)
+	if err := h.wsSvc.PublishUserRoleChanged(ctx, roomID, targetID, targetMember.Username,
+		oldRole, "owner", userID, requesterMember.Username); err != nil {
+		log.Error("failed to publish ownership transfer", zap.Error(err))
+	}
+
 	resp.NoContentResponse()
 }
 

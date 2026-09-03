@@ -153,3 +153,37 @@ func (r *RoomsRepository) UnmuteMember(ctx context.Context, roomID, userID strin
 	}
 	return nil
 }
+
+func (r *RoomsRepository) TransferOwnership(ctx context.Context, roomID, oldOwnerID, newOwnerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
+	defer cancel()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx,
+		`UPDATE gochat.room_members SET role=$1 WHERE room_id=$2 AND user_id=$3`,
+		domain_models.MemberRoleOwner, roomID, newOwnerID)
+	if err != nil {
+		return fmt.Errorf("update new owner role: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE gochat.room_members SET role=$1 WHERE room_id=$2 AND user_id=$3`,
+		domain_models.MemberRoleAdmin, roomID, oldOwnerID)
+	if err != nil {
+		return fmt.Errorf("update old owner role: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE gochat.rooms SET owner_id=$1 WHERE id=$2`,
+		newOwnerID, roomID)
+	if err != nil {
+		return fmt.Errorf("update room owner: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}

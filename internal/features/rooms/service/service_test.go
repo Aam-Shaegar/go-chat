@@ -149,6 +149,11 @@ func (m *MockRepository) GetUser(ctx context.Context, userID string) (domain_mod
 	return args.Get(0).(domain_models.User), args.Error(1)
 }
 
+func (m *MockRepository) TransferOwnership(ctx context.Context, roomID, oldOwnerID, newOwnerID string) error {
+	args := m.Called(ctx, roomID, oldOwnerID, newOwnerID)
+	return args.Error(0)
+}
+
 // --- Хелперы ---
 
 const (
@@ -420,6 +425,7 @@ func TestUpdateMemberRole_Success(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
+	repo.On("GetRoom", ctx, roomID).Return(newRoom(false), nil)
 	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
 	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
 	repo.On("UpdateMemberRole", ctx, roomID, memberID, domain_models.MemberRoleAdmin).Return(nil)
@@ -433,6 +439,7 @@ func TestUpdateMemberRole_CannotChangeOwnerRole(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
+	repo.On("GetRoom", ctx, roomID).Return(newRoom(false), nil)
 	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
 	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
 
@@ -446,6 +453,7 @@ func TestUpdateMemberRole_CannotAssignOwner(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
+	repo.On("GetRoom", ctx, roomID).Return(newRoom(false), nil)
 	repo.On("GetMember", ctx, roomID, ownerID).Return(newMember(ownerID, domain_models.MemberRoleOwner), nil)
 	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
 
@@ -459,6 +467,7 @@ func TestUpdateMemberRole_NotOwner(t *testing.T) {
 	svc, repo := newService()
 	ctx := context.Background()
 
+	repo.On("GetRoom", ctx, roomID).Return(newRoom(false), nil)
 	repo.On("GetMember", ctx, roomID, memberID).Return(newMember(memberID, domain_models.MemberRoleMember), nil)
 
 	err := svc.UpdateMemberRole(ctx, roomID, memberID, adminID, domain_models.MemberRoleAdmin)

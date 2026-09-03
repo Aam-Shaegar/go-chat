@@ -7,7 +7,7 @@ import { useChatLoader } from '../hooks/useChatLoader'
 import { useChatScroll } from '../hooks/useChatScroll'
 import { useTyping } from '../hooks/useTyping'
 import { roomsApi, dmApi } from '../api/rooms'
-import type { Message, MessageReaction, RoomMember, RoomInvite, RoomBan } from '../types'
+import type { Message, MessageReaction, RoomMember, RoomInvite, RoomBan, MemberRole } from '../types'
 
 interface ChatAreaProps {
   onBack: () => void
@@ -39,6 +39,15 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
   const [showInviteTokensModal, setShowInviteTokensModal] = useState(false)
   const [showBansListModal, setShowBansListModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [showRoleModal, setShowRoleModal] = useState<{
+    member: RoomMember | null
+    newRole: MemberRole
+    isOpen: boolean
+  }>({ member: null, newRole: 'member', isOpen: false })
+  const [showTransferModal, setShowTransferModal] = useState<{
+    member: RoomMember | null
+    isOpen: boolean
+  }>({ member: null, isOpen: false })
   const [members, setMembers] = useState<RoomMember[]>([])
   const [invites, setInvites] = useState<RoomInvite[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -119,6 +128,38 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
       }
     }
   }, [activeRoomId])
+
+  const openRoleModal = useCallback((member: RoomMember, newRole: MemberRole) => {
+    setShowRoleModal({ member, newRole, isOpen: true })
+    closeContextMenu()
+  }, [])
+
+  const openTransferOwnershipModal = useCallback((member: RoomMember) => {
+    setShowTransferModal({ member, isOpen: true })
+    closeContextMenu()
+  }, [])
+
+  const handleRoleConfirm = useCallback(async () => {
+    if (!activeRoomId || !showRoleModal.member) return
+    try {
+      await roomsApi.updateRole(activeRoomId, showRoleModal.member.user_id, showRoleModal.newRole)
+      setShowRoleModal({ member: null, newRole: 'member', isOpen: false })
+    } catch (error) {
+      console.error('Failed to change role:', error)
+      if (error instanceof Error) alert('Failed: ' + error.message)
+    }
+  }, [activeRoomId, showRoleModal])
+
+  const handleTransferConfirm = useCallback(async (typedUsername: string) => {
+    if (!activeRoomId || !showTransferModal.member) return
+    try {
+      await roomsApi.transferOwnership(activeRoomId, showTransferModal.member.user_id, typedUsername)
+      setShowTransferModal({ member: null, isOpen: false })
+    } catch (error) {
+      console.error('Failed to transfer ownership:', error)
+      if (error instanceof Error) alert('Failed: ' + error.message)
+    }
+  }, [activeRoomId, showTransferModal])
 
   const handleKick = useCallback(async (member: RoomMember) => {
     if (!activeRoomId || !confirm(`Kick ${member.username} from this room?`)) return
@@ -647,6 +688,25 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
           />
         )}
 
+        {showRoleModal.isOpen && showRoleModal.member && (
+          <RoleChangeModal
+            isOpen={showRoleModal.isOpen}
+            onClose={() => setShowRoleModal({ member: null, newRole: 'member', isOpen: false })}
+            onConfirm={handleRoleConfirm}
+            member={showRoleModal.member}
+            newRole={showRoleModal.newRole}
+          />
+        )}
+
+        {showTransferModal.isOpen && showTransferModal.member && (
+          <TransferOwnershipModal
+            isOpen={showTransferModal.isOpen}
+            onClose={() => setShowTransferModal({ member: null, isOpen: false })}
+            onConfirm={handleTransferConfirm}
+            targetUsername={showTransferModal.member.username}
+          />
+        )}
+
         <MembersModal
           isOpen={showMembersModal}
           onClose={() => setShowMembersModal(false)}
@@ -692,6 +752,48 @@ export function ChatArea({ onBack, setSidebarOpen }: ChatAreaProps) {
               <Icon name="message" className="h-4 w-4" />
               Direct Message
             </button>
+
+            {/* Role Management - only for owner, non-DM rooms */}
+            {canManage(contextMenu.member!.role) && !room?.is_dm && currentUserRole === 'owner' && contextMenu.member!.role !== 'owner' && (
+              <>
+                <div className="border-t border-slate-100 my-1" />
+                
+                {/* Make Admin - only for members */}
+                {contextMenu.member!.role === 'member' && (
+                  <button
+                    type="button"
+                    onClick={() => openRoleModal(contextMenu.member!, 'admin')}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Icon name="shield" className="h-4 w-4" />
+                    Make Admin
+                  </button>
+                )}
+
+                {/* Demote to Member - only for admins */}
+                {contextMenu.member!.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => openRoleModal(contextMenu.member!, 'member')}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Icon name="user" className="h-4 w-4" />
+                    Demote to Member
+                  </button>
+                )}
+
+                {/* Transfer Ownership */}
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  type="button"
+                  onClick={() => openTransferOwnershipModal(contextMenu.member!)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50"
+                >
+                  <Icon name="crown" className="h-4 w-4" />
+                  Transfer Ownership
+                </button>
+              </>
+            )}
 
             {canManage(contextMenu.member!.role) && !room?.is_dm && (
               <>
@@ -1399,6 +1501,169 @@ function LeaveModal({ isOpen, onClose, onConfirm, roomName }: {
   )
 }
 
+function RoleChangeModal({ isOpen, onClose, onConfirm, member, newRole }: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  member: RoomMember
+  newRole: MemberRole
+}) {
+  if (!isOpen) return null
+
+  const isPromote = newRole === 'admin'
+  const action = isPromote ? 'make admin' : 'demote to member'
+  const iconName = isPromote ? 'shield' : 'user'
+  const color = isPromote ? 'blue' : 'amber'
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-950">Confirm {action}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="text-center">
+            <div className={`mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-${color}-50 text-${color}-600`}>
+              <Icon name={iconName} className="h-6 w-6" />
+            </div>
+            <p className="text-sm text-slate-700">
+              Are you sure you want to <strong>{action}</strong>
+              <span className="font-medium">{member.username}</span>?
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              {isPromote
+                ? 'They will gain admin privileges immediately.'
+                : 'They will lose admin privileges immediately.'}
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-full border border-slate-300 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className={`flex-1 h-10 rounded-full text-sm font-semibold text-white transition ${
+                isPromote
+                  ? 'bg-[#229ed9] hover:bg-[#168ac0]'
+                  : 'bg-amber-600 hover:bg-amber-700'
+              }`}
+            >
+              {isPromote ? 'Make Admin' : 'Demote'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TransferOwnershipModal({ isOpen, onClose, onConfirm, targetUsername }: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: (username: string) => void
+  targetUsername: string
+}) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleSubmit = () => {
+    if (input === targetUsername) {
+      onConfirm(input)
+    } else {
+      setError('Username does not match. Try again.')
+      setInput('')
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h3 className="text-sm font-semibold text-slate-950">Transfer Ownership</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-amber-800 mb-2">
+              <Icon name="alertTriangle" className="h-5 w-5 shrink-0" />
+              <span className="font-semibold">Irreversible Action</span>
+            </div>
+            <p className="text-sm text-amber-700">
+              You are transferring ownership to <strong>{targetUsername}</strong>.
+              You will become an admin and <strong>cannot reclaim ownership</strong>
+              unless they transfer it back.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Type username to confirm
+            </label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setError('') }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              placeholder={`Type "${targetUsername}" exactly`}
+              className={`w-full h-10 rounded-xl border px-3 text-sm text-slate-950 outline-none transition ${
+                error ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+              } focus:border-[#229ed9]`}
+              autoFocus
+            />
+            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-full border border-slate-300 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!input}
+              className="flex-1 h-10 rounded-full bg-red-600 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Transfer Ownership
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MembersModal({ isOpen, onClose, members, loading, isDM, currentUserId, roomId, onContextMenu, invites, currentUserRole, onOpenInviteTokens, onOpenBansList }: {
   isOpen: boolean
   onClose: () => void
@@ -1865,7 +2130,7 @@ function ConversationAvatar({ name, isDM = false, compact = false }: {
   )
 }
 
-type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'userCheck' | 'userX' | 'bell' | 'bellOff' | 'logOut'
+type IconName = 'back' | 'send' | 'link' | 'lock' | 'close' | 'down' | 'smile' | 'edit' | 'trash' | 'check' | 'message' | 'userMinus' | 'userCheck' | 'userX' | 'bell' | 'bellOff' | 'logOut' | 'shield' | 'crown' | 'alertTriangle' | 'user'
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -1886,6 +2151,10 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     bell: <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />,
     bellOff: <path d="M8.7 3.3a20.2 20.2 0 0 0 0 21.4M22.5 8.5a20.2 20.2 0 0 1-20.2 10.2M18 8a6 6 0 0 0-9.3 3.3m-4.7 5.7A6.1 6.1 0 0 0 14 18c0 7-3 7-3 9M10 21h4M1 1l22 22" />,
     logOut: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
+    shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+    crown: <path d="M12 2l2 5h6l-5 4 2 5L12 17l-6 4 2-5-5-4h6z" />,
+    alertTriangle: <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />,
+    user: <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />,
   }
 
   return (

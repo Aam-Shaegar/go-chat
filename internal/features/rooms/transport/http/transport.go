@@ -43,6 +43,7 @@ type RoomsService interface {
 	GetRoomBans(ctx context.Context, roomID, userID string) ([]domain_models.RoomBan, error)
 
 	GetUser(ctx context.Context, userID string) (domain_models.User, error)
+	TransferOwnership(ctx context.Context, roomID, requesterID, targetUserID, targetUsername string) error
 }
 
 func NewRoomsHandler(service RoomsService, wsSvc ws_service.ServiceInterface) *RoomsHandler {
@@ -64,6 +65,7 @@ func (h *RoomsHandler) Routes(auth core_http_middleware.Middleware) []core_http_
 		{Method: http.MethodGet, Path: "/rooms/{roomId}/members", Handler: h.GetMembers, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}", Handler: h.KickMember, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/role", Handler: h.UpdateMemberRole, Middleware: []core_http_middleware.Middleware{auth}},
+		{Method: http.MethodPost, Path: "/rooms/{roomId}/members/{userId}/transfer-ownership", Handler: h.TransferOwnership, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodPatch, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.MuteMember, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodDelete, Path: "/rooms/{roomId}/members/{userId}/mute", Handler: h.UnmuteMember, Middleware: []core_http_middleware.Middleware{auth}},
 		{Method: http.MethodPost, Path: "/rooms/{roomId}/members/{userId}/ban", Handler: h.BanMember, Middleware: []core_http_middleware.Middleware{auth}},

@@ -50,4 +50,5 @@ type Repository interface {
 	CleanExpiredBans(ctx context.Context) error
 
 	GetUser(ctx context.Context, userID string) (domain_models.User, error)
+	TransferOwnership(ctx context.Context, roomID, oldOwnerID, newOwnerID string) error
 }

@@ -27,8 +27,9 @@ const (
 	EventTypeInviteDeactivated EventType = "invite_deactivated"
 	EventTypeInviteUsed        EventType = "invite_used"
 	EventTypeError             EventType = "error"
-	EventTypeUserBanned        EventType = "user_banned"
-	EventTypeUserUnbanned      EventType = "user_unbanned"
+	EventTypeUserBanned         EventType = "user_banned"
+	EventTypeUserUnbanned       EventType = "user_unbanned"
+	EventTypeUserRoleChanged    EventType = "user_role_changed"
 )
 
 type IncomingEvent struct {
@@ -175,4 +176,22 @@ type UserUnbannedPayload struct {
 	Username       string `json:"username"`
 	UnbannedBy     string `json:"unbanned_by"`
 	UnbannedByName string `json:"unbanned_by_name"`
+}
+
+type MemberRole string
+
+const (
+	MemberRoleOwner  MemberRole = "owner"
+	MemberRoleAdmin  MemberRole = "admin"
+	MemberRoleMember MemberRole = "member"
+)
+
+type UserRoleChangedPayload struct {
+	RoomID           string     `json:"room_id"`
+	UserID           string     `json:"user_id"`
+	Username         string     `json:"username"`
+	OldRole          MemberRole `json:"old_role"`
+	NewRole          MemberRole `json:"new_role"`
+	ChangedBy        string     `json:"changed_by"`
+	ChangedByName    string     `json:"changed_by_name"`
 }

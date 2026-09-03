@@ -91,6 +91,14 @@ func (s *RoomsService) KickMember(ctx context.Context, roomID, requesterID, targ
 }
 
 func (s *RoomsService) UpdateMemberRole(ctx context.Context, roomID, requesterID, targetUserID string, role domain_models.MemberRole) error {
+	room, err := s.repo.GetRoom(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.IsDM {
+		return fmt.Errorf("cannot change roles in DM: %w", core_error.ErrInvalidArgument)
+	}
+
 	requester, err := s.repo.GetMember(ctx, roomID, requesterID)
 	if err != nil {
 		return fmt.Errorf("get requester: %w", err)
@@ -106,9 +114,42 @@ func (s *RoomsService) UpdateMemberRole(ctx context.Context, roomID, requesterID
 		return fmt.Errorf("cannot change owner role: %w", core_error.ErrInvalidArgument)
 	}
 	if role == domain_models.MemberRoleOwner {
-		return fmt.Errorf("cannot assign owner role: %w", core_error.ErrInvalidArgument)
+		return fmt.Errorf("cannot assign owner role via UpdateMemberRole, use TransferOwnership: %w", core_error.ErrInvalidArgument)
 	}
 	return s.repo.UpdateMemberRole(ctx, roomID, targetUserID, role)
+}
+
+func (s *RoomsService) TransferOwnership(ctx context.Context, roomID, requesterID, targetUserID, targetUsername string) error {
+	room, err := s.repo.GetRoom(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.IsDM {
+		return fmt.Errorf("cannot transfer ownership in DM: %w", core_error.ErrInvalidArgument)
+	}
+
+	requester, err := s.repo.GetMember(ctx, roomID, requesterID)
+	if err != nil {
+		return fmt.Errorf("get requester: %w", err)
+	}
+	if !requester.IsOwner() {
+		return fmt.Errorf("only owner can transfer ownership: %w", core_error.ErrUnauthorized)
+	}
+
+	target, err := s.repo.GetMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("get target: %w", err)
+	}
+
+	if target.Username != targetUsername {
+		return fmt.Errorf("username does not match: %w", core_error.ErrInvalidArgument)
+	}
+
+	if requesterID == targetUserID {
+		return fmt.Errorf("cannot transfer to yourself: %w", core_error.ErrInvalidArgument)
+	}
+
+	return s.repo.TransferOwnership(ctx, roomID, requesterID, targetUserID)
 }
 
 func (s *RoomsService) GetMembers(ctx context.Context, roomID, userID string) ([]domain_models.RoomMember, error) {

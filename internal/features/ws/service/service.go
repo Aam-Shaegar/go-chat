@@ -53,6 +53,7 @@ type ServiceInterface interface {
 	PublishInviteDeactivated(ctx context.Context, roomID, token string) error
 	PublishInviteUsed(ctx context.Context, roomID, token string, uses, maxUses int) error
 	PublishUserLeft(ctx context.Context, roomID, userID, username string) error
+	PublishUserRoleChanged(ctx context.Context, roomID, targetUserID, targetUsername, oldRole, newRole, changedBy, changedByName string) error
 }
 
 func (s *WSService) OnConnect(client *ws_client.Client) {
@@ -599,4 +600,20 @@ func (s *WSService) PublishUserLeft(ctx context.Context, roomID, userID, usernam
 	}
 	s.hub.ForceDisconnect(userID, roomID)
 	return nil
+}
+
+func (s *WSService) PublishUserRoleChanged(ctx context.Context, roomID, targetUserID, targetUsername, oldRole, newRole, changedBy, changedByName string) error {
+	event := ws_domain.OutgoingEvent{
+		Type: ws_domain.EventTypeUserRoleChanged,
+		Payload: ws_domain.UserRoleChangedPayload{
+			RoomID:         roomID,
+			UserID:         targetUserID,
+			Username:       targetUsername,
+			OldRole:        ws_domain.MemberRole(oldRole),
+			NewRole:        ws_domain.MemberRole(newRole),
+			ChangedBy:      changedBy,
+			ChangedByName:  changedByName,
+		},
+	}
+	return s.publishRoomEvent(ctx, roomID, event, nil)
 }

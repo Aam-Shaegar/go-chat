@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Room, Message, RoomMember } from '../types'
+import type { Room, Message, RoomMember, MemberRole } from '../types'
 
 export type RoomConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -53,6 +53,7 @@ interface ChatState {
   isMemberBanned: (roomId: string, userId: string) => boolean
   getMutedUntil: (roomId: string, userId: string) => string | undefined
   syncMutedMembers: (roomId: string, members: RoomMember[]) => void
+  updateMemberRole: (roomId: string, userId: string, role: MemberRole) => void
   getOnlineCount: (roomId: string, currentUserId?: string) => number
   isUserOnline: (roomId: string, userId: string) => boolean
   resetChat: () => void
@@ -426,6 +427,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const roomPresence = get().presence[roomId]
     return roomPresence?.has(userId) ?? false
   },
+
+  updateMemberRole: (roomId, userId, role) =>
+    set((s) => {
+      const updateList = (list: Room[]) =>
+        list.map((r) =>
+          r.id !== roomId
+            ? r
+            : {
+                ...r,
+                members: r.members?.map((m) =>
+                  m.user_id === userId ? { ...m, role } : m
+                ),
+              }
+        )
+      return { rooms: updateList(s.rooms), dms: updateList(s.dms) }
+    }),
 
   resetChat: () => set({
     rooms: [],
