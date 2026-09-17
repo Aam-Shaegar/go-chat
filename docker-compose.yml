@@ -99,11 +99,21 @@ services:
 
     restart: unless-stopped
 
-    ports:
-      - "80:80"
+    # Порт 80 НЕ публикуем: наружу смотрит общий Caddy из проекта Rhytm.
+    # nginx доступен ему по имени gochat-nginx через общую сеть edge.
+    container_name: gochat-nginx
+
+    networks:
+      - default
+      - edge
 
 volumes:
 
   postgres_data:
 
   redis_data:
+
+networks:
+
+  edge:
+    external: true
